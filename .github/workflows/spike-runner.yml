@@ -1,0 +1,162 @@
+# CI runner evaluation (spike): the same measurements on GitHub-hosted and Incredibuild runners.
+# First run = cold. Re-run the same workflow run ("Re-run all jobs") for the warm numbers.
+# Results and interpretation: docs/benchmarks/ci-runners.md
+name: runner-spike
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/spike-runner.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.4"
+  REDIS_REPO: https://github.com/redis/redis
+  REDIS_COMMIT: 1a2574ce1551d3de6e0b4a56756c0fdbc6659e4f # tag 8.10.3
+  BASE_IMAGE: busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec # 1.37.0
+
+jobs:
+  measure:
+    name: measure (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, incredibuild-runner]
+    env:
+      RUNNER_UNDER_TEST: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Timing helper
+        run: |
+          cat > "$RUNNER_TEMP/timeit.sh" <<'EOF'
+          # timeit <metric> <command...>: runs the command and appends RESULT,<runner>,<metric>,<seconds>,<exit code>
+          timeit() {
+            local metric="$1"; shift
+            local start end rc=0
+            start=$(date +%s.%N)
+            "$@" || rc=$?
+            end=$(date +%s.%N)
+            echo "RESULT,${RUNNER_UNDER_TEST},${metric},$(awk -v s="$start" -v e="$end" 'BEGIN{printf "%.1f", e-s}'),${rc}" \
+              | tee -a "$RUNNER_TEMP/results.csv"
+            return "$rc"
+          }
+          EOF
+          echo "runner,metric,seconds,exit" > "$RUNNER_TEMP/results.csv"
+
+      - name: Machine facts
+        run: |
+          {
+            echo "## ${RUNNER_UNDER_TEST}"
+            echo '```'
+            uname -a
+            grep -E '^(PRETTY_NAME|VERSION_ID)=' /etc/os-release
+            echo "nproc: $(nproc)"
+            lscpu | grep -E '^(Model name|CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket)' || true
+            free -h
+            df -h / "$GITHUB_WORKSPACE" "$RUNNER_TEMP" | sort -u
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Tool inventory
+        run: |
+          v() { if command -v "$1" >/dev/null 2>&1; then printf '%-10s %s\n' "$1" "$("$@" 2>&1 | head -1)"; else printf '%-10s %s\n' "$1" "MISSING"; fi; }
+          {
+            echo '```'
+            v docker --version; v git --version; v gcc --version; v g++ --version; v clang --version
+            v cmake --version; v ninja --version; v make --version; v go version; v node --version
+            v npm --version; v python3 --version; v aws --version; v kubectl version --client
+            v helm version --short; v terraform version
+            echo "--- docker buildx ls"; docker buildx ls 2>&1 | head -5 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Network egress
+        continue-on-error: true
+        run: |
+          for u in https://github.com https://registry.npmjs.org https://proxy.golang.org https://public.ecr.aws \
+                   https://sts.eu-central-1.amazonaws.com https://api.ecr.eu-central-1.amazonaws.com; do
+            curl -sS -o /dev/null --max-time 20 \
+              -w "%{http_code} dns=%{time_namelookup}s connect=%{time_connect}s tls=%{time_appconnect}s total=%{time_total}s  ${u}\n" "$u" || echo "FAILED ${u}"
+          done
+          # Throughput: download the Go toolchain archive (~70 MB) and discard it.
+          speed=$(curl -sSL -o /dev/null --max-time 120 -w '%{speed_download}' "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz")
+          echo "RESULT,${RUNNER_UNDER_TEST},download_MBps,$(awk -v b="$speed" 'BEGIN{printf "%.1f", b/1048576}'),0" | tee -a "$RUNNER_TEMP/results.csv"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Restore Go build cache (actions/cache round-trip)
+        id: gocache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/gocache
+          key: spike-gocache-${{ matrix.runner }}-${{ env.GO_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            spike-gocache-${{ matrix.runner }}-${{ env.GO_VERSION }}-
+
+      - name: "Go: build the standard library (empty cache, CPU-bound)"
+        continue-on-error: true
+        run: |
+          source "$RUNNER_TEMP/timeit.sh"
+          echo "actions/cache hit: '${{ steps.gocache.outputs.cache-hit }}' matched key: '${{ steps.gocache.outputs.cache-matched-key }}'"
+          GOCACHE="$RUNNER_TEMP/gocache-cold" timeit go_std_cold go build -a std
+
+      - name: "Go: build the standard library (with the restored cache)"
+        continue-on-error: true
+        run: |
+          source "$RUNNER_TEMP/timeit.sh"
+          GOCACHE="$RUNNER_TEMP/gocache" timeit go_std_with_actions_cache go build std
+
+      - name: Save Go build cache
+        if: steps.gocache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/gocache
+          key: spike-gocache-${{ matrix.runner }}-${{ env.GO_VERSION }}-${{ github.run_id }}
+
+      - name: "C: build Redis with make -j$(nproc)"
+        continue-on-error: true
+        run: |
+          source "$RUNNER_TEMP/timeit.sh"
+          git init -q "$RUNNER_TEMP/redis" && cd "$RUNNER_TEMP/redis"
+          timeit redis_fetch git fetch -q --depth 1 "$REDIS_REPO" "$REDIS_COMMIT"
+          git checkout -q FETCH_HEAD
+          timeit redis_make make -j"$(nproc)" >"$RUNNER_TEMP/redis-make.log" 2>&1 || { tail -20 "$RUNNER_TEMP/redis-make.log"; exit 1; }
+
+      - name: "Docker: build an image twice (second build uses the local layer cache)"
+        continue-on-error: true
+        run: |
+          source "$RUNNER_TEMP/timeit.sh"
+          mkdir -p "$RUNNER_TEMP/img" && cd "$RUNNER_TEMP/img"
+          printf 'FROM %s\nRUN dd if=/dev/urandom of=/blob bs=1M count=50\nRUN sha256sum /blob > /blob.sha256\n' "$BASE_IMAGE" > Dockerfile
+          timeit docker_build_first docker build --progress=plain -t runner-spike:first .
+          timeit docker_build_second docker build --progress=plain -t runner-spike:second .
+
+      - name: Results summary
+        if: always()
+        run: |
+          {
+            echo "### Results (${RUNNER_UNDER_TEST}, run attempt ${GITHUB_RUN_ATTEMPT})"
+            echo '| metric | seconds (or MB/s) | exit |'
+            echo '|---|---|---|'
+            tail -n +2 "$RUNNER_TEMP/results.csv" | awk -F, '{print "| " $2 " | " $3 " | " $4 " |"}'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
