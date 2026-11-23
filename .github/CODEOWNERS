@@ -1,0 +1,36 @@
+# Code owners: who reviews changes to which paths.
+# GitHub requests a review from the owners of every path a PR touches. Required code-owner
+# approval is switched on later in the ruleset; until then this file routes review requests.
+# The LAST matching pattern wins: put broad rules first and specific paths after them.
+# Syntax: <pattern> <@user or @org/team>...  A leading "/" anchors to the repo root, and a
+# trailing "/" matches a directory.
+#
+# Platform and process: whatever changes how code is built, deployed, secured or reviewed.
+# No catch-all owner: app code (apps/, native/), data/ and docs/ flow without a review request,
+# so a request from this file always means "this touches the platform".
+
+# CI/CD, repository config, and this file itself
+/.github/                  @haimlevtov
+
+# Infrastructure (Terraform modules and the Terragrunt live layer)
+/infra/                    @haimlevtov
+
+# GitOps: Argo CD apps, cluster addons and the shared chart every service deploys with
+/deploy/                   @haimlevtov
+# ...except per-environment values: image-tag promotion PRs must merge without a human
+/deploy/envs/
+
+# Policy guardrails (Kyverno)
+/platform/policies/        @haimlevtov
+
+# Quality gates and tool versions (an agent must not quietly weaken checks or swap tools)
+/Makefile                  @haimlevtov
+/.pre-commit-config.yaml   @haimlevtov
+/.mise.toml                @haimlevtov
+
+# Rules, guardrails and playbooks for contributors and agents
+/CLAUDE.md                 @haimlevtov
+/.claude/                  @haimlevtov
+
+# Service ownership and SLOs
+/catalog/                  @haimlevtov
