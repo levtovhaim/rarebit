@@ -44,6 +44,7 @@ Overrides:
   - two fleets to monitor
   - a job's class has to be right, or it runs in the wrong place
   - the break-even (roughly 6–7 minutes of CPU-bound work on a GitHub-hosted runner) rests on one spike
+  - the Incredibuild GitHub App asks for repository `administration: write`, `actions: write`, `repository_hooks: write` and `statuses: write`. With those it could change rulesets and settings, add webhooks, and post commit statuses that look like passing checks. Mitigations: install it on this repository only; when status checks become required, pin each one to the GitHub Actions app as its source; ask the vendor whether runner registration can work with less; uninstall it when the evaluation ends.
 - **Follow-ups:** `runner-edge.yml` repeats the measurements with medians of at least 5 runs and real workloads; burst and cache experiments run later.
 
 ## How we'll know it was right
