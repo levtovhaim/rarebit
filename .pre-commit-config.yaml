@@ -54,6 +54,12 @@ repos:
         entry: yamllint
         language: system
         types: [yaml]
+      - id: permission-gate-tests
+        name: permission gate tests (.claude/hooks)
+        entry: bash .claude/hooks/test-readonly-gate.sh
+        language: system
+        files: ^\.claude/(hooks/|settings\.json$)
+        pass_filenames: false
       - id: terraform-fmt
         name: terraform fmt
         entry: bash -c 'rc=0; for f in "$@"; do terraform fmt -check -diff "$f" || rc=1; done; exit $rc' --
