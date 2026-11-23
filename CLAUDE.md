@@ -39,6 +39,7 @@
 - LLM use (arena personas, content agents, exploratory QA) has a per-run token cap, a monthly cap and a kill switch (repo variable `LLM_ENABLED`).
 
 ## Commands
+- `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
 - `make check`: lint and unit tests for what changed. Run it before every commit.
 - `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset.
 - `make up` / `make smoke` / `make down`: local stack with docker compose; `smoke` = bots play a full game.

@@ -14,6 +14,12 @@ Early setup: nothing runs yet. This first commit holds the contributor rules and
 - **A platform around them:** golden-path templates, one shared Helm chart, reusable GitHub Actions workflows, GitOps with Argo CD, a preview environment per pull request, policy guardrails, observability with SLOs, and cost controls.
 - **Built for many parallel contributors, human or AI agent:** CI scoped to what changed, a merge queue, isolated previews and least-privilege identities.
 
+## Set up a machine
+
+1. Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes), and inside this directory it sets `AWS_PROFILE=rarebit`.
+2. Sign in to GitHub: `gh auth login`.
+3. Maintainers with AWS access only: `aws login --profile rarebit`. It gives short-lived credentials from a console sign-in, so no access keys are stored.
+
 ## Contributing
 
 Read [CLAUDE.md](CLAUDE.md) first. It holds the rules every contributor follows, the architecture and the documentation map. Every change goes through a pull request.
