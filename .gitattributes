@@ -1,0 +1,16 @@
+# LF everywhere (CLAUDE.md → Conventions). Git stores text files with LF and checks them out with LF,
+# on Linux, macOS and Windows alike.
+* text=auto eol=lf
+
+# Binary files: never touch their line endings.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.zip   binary
+*.gz    binary
+*.tgz   binary

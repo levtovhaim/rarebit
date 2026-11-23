@@ -1,0 +1,43 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+.venv/
+
+# Native builds (CMake presets)
+native/**/build/
+CMakeUserPresets.json
+
+# Terraform / Terragrunt: state lives in S3, never in git (.terraform.lock.hcl IS committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+.terragrunt-cache/
+
+# Local config and secrets: config comes from env vars, secrets from External Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kubeconfig*
+
+# Tools and editors
+.claude/settings.local.json
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.log
+
+# Worktrees live outside the checkout (CLAUDE.md → Worktrees and parallel work)
+.worktrees/
+.claude/worktrees/

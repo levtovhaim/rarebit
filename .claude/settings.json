@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Bash(terraform apply)",
+      "Bash(terraform apply *)",
+      "Bash(terraform destroy)",
+      "Bash(terraform destroy *)",
+      "Bash(terraform import *)",
+      "Bash(terraform state *)",
+      "Bash(terraform force-unlock *)",
+      "Bash(terragrunt apply)",
+      "Bash(terragrunt apply *)",
+      "Bash(terragrunt destroy)",
+      "Bash(terragrunt destroy *)",
+      "Bash(terragrunt run *)",
+      "Bash(plat env *)",
+      "Bash(aws *)",
+      "Bash(kubectl apply *)",
+      "Bash(kubectl delete *)",
+      "Bash(kubectl drain *)",
+      "Bash(kubectl scale *)",
+      "Bash(kubectl edit *)",
+      "Bash(helm install *)",
+      "Bash(helm upgrade *)",
+      "Bash(helm uninstall *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh secret *)",
+      "Bash(gh variable *)",
+      "Bash(gh api *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(~/.aws/credentials)"
+    ]
+  }
+}
