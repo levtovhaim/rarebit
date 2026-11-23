@@ -6,10 +6,20 @@ Compares GitHub-hosted runners with Incredibuild runners for the job classes thi
 
 | | GitHub-hosted | Incredibuild |
 |---|---|---|
-| Label | `ubuntu-24.04` | `incredibuild-runner` |
-| OS scope (2026-11-23) | Linux, Windows, macOS | Linux (Ubuntu x64) only; the GitHub Actions runners are in beta |
+| Label compared | `ubuntu-24.04` | `incredibuild-ubuntu-2404` |
+| OS scope (2026-11-23) | Linux (x64, Arm), Windows, macOS | Docs and the Console banner: Linux (Ubuntu x64), beta. The Console's label table also lists Arm and Windows (below). The `probe` job checks which runners exist. |
 | Cost for this repo | free (public repository) | free trial (3 months) |
 | Caching | none built in (`actions/cache` is opt-in) | "zero-config caching"; what it stores is not documented |
+
+Label mapping shown by the Incredibuild Console on 2026-11-23. The docs page still shows a single `incredibuild-runner` label, which no runner served for this repository.
+
+| GitHub-hosted | Incredibuild |
+|---|---|
+| `ubuntu-latest` | `incredibuild-ubuntu-latest` |
+| `ubuntu-24.04` | `incredibuild-ubuntu-2404` |
+| `ubuntu-22.04` | `incredibuild-ubuntu-2204` |
+| `ubuntu-24.04-arm` | `incredibuild-ubuntu-2404-arm` |
+| `windows-2022` | `incredibuild-windows-2022` |
 
 Workflow: [`.github/workflows/spike-runner.yml`](../../.github/workflows/spike-runner.yml). Every input is pinned, so both fleets do identical work:
 
@@ -27,6 +37,7 @@ Workflow: [`.github/workflows/spike-runner.yml`](../../.github/workflows/spike-r
 | `redis_fetch`, `redis_make` | a shallow fetch and a `make -j$(nproc)` C build |
 | `docker_build_first`, `docker_build_second` | an image build, then the same build again (the local layer cache) |
 | queue time, job duration | from the GitHub API (`created_at` → `started_at` → `completed_at`) |
+| `probe` job | whether the Arm and Windows labels are served, and the OS/CPU/memory/tools of each runner, next to its GitHub-hosted counterpart |
 
 ## Results
 

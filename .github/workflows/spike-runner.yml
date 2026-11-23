@@ -1,4 +1,6 @@
 # CI runner evaluation (spike): the same measurements on GitHub-hosted and Incredibuild runners.
+# `measure` compares ubuntu-24.04 with its Incredibuild counterpart; `probe` checks which other
+# Incredibuild runners (Arm, Windows) actually exist, next to their GitHub-hosted counterparts.
 # First run = cold. Re-run the same workflow run ("Re-run all jobs") for the warm numbers.
 # Results and interpretation: docs/benchmarks/ci-runners.md
 name: runner-spike
@@ -30,7 +32,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, incredibuild-runner]
+        # Incredibuild maps each GitHub-hosted label to its own (Incredibuild Console, 2026-11-23).
+        runner: [ubuntu-24.04, incredibuild-ubuntu-2404]
     env:
       RUNNER_UNDER_TEST: ${{ matrix.runner }}
     defaults:
@@ -159,4 +162,37 @@ jobs:
             echo '| metric | seconds (or MB/s) | exit |'
             echo '|---|---|---|'
             tail -n +2 "$RUNNER_TEMP/results.csv" | awk -F, '{print "| " $2 " | " $3 " | " $4 " |"}'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  probe:
+    # Does the runner exist, and what is it? The docs say Ubuntu x64 only; the Console also lists
+    # Arm and Windows labels. A label that no runner serves leaves this job queued: that is the answer.
+    name: probe (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [incredibuild-ubuntu-2404-arm, ubuntu-24.04-arm, incredibuild-windows-2022, windows-2022]
+    env:
+      RUNNER_UNDER_TEST: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Machine facts
+        run: |
+          {
+            echo "## ${RUNNER_UNDER_TEST} (os=${RUNNER_OS}, arch=${RUNNER_ARCH})"
+            echo '```'
+            uname -a
+            echo "nproc: $(nproc)"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).Caption; (Get-CimInstance Win32_Processor | Select-Object -First 1).Name; '{0:N1} GB RAM' -f ((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)"
+            else
+              grep -E '^PRETTY_NAME=' /etc/os-release; lscpu | grep -E '^(Model name|Architecture)' || true; free -h
+            fi
+            df -h "$RUNNER_TEMP" | tail -1
+            for t in docker git cmake ninja; do printf '%-7s %s\n' "$t" "$($t --version 2>/dev/null | head -1 || echo MISSING)"; done
+            echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
