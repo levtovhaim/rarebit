@@ -1,0 +1,51 @@
+# Pinned tool versions for this repo, the same on every machine, agent and CI job.
+# Install them with `mise install` in the repo root (https://mise.jdx.dev).
+# Bump a version only by PR, following .claude/skills/dependency-versioning (7-day publish-age rule).
+# Versions checked on 2026-11-23.
+
+# Oldest mise this file was verified with (mise refuses to run older versions).
+min_version = "2026.11.9"
+
+[env]
+# The project's AWS account. Inside this repo nothing falls back to a `default` profile.
+AWS_PROFILE = "rarebit"
+AWS_REGION = "eu-central-1"
+
+[tools]
+# Infrastructure as code
+terraform = "1.17.2"
+terragrunt = "1.2.2"
+tflint = "0.66.0"
+infracost = "0.10.50"
+
+# Kubernetes and GitOps. kubectl tracks the EKS version we target (1.37, standard support).
+kubectl = "1.37.2"
+helm = "4.3.2"
+kind = "0.33.0"
+argocd = "3.6.1"
+stern = "1.35.0"
+k9s = "0.51.0"
+
+# Cloud and GitHub CLIs. aws-cli 2.32+ is needed for `aws login`.
+aws-cli = "2.40.4"
+"aqua:cli/cli" = "2.104.0"
+
+# Languages
+node = "26.13.1"
+go = "1.27.4"
+python = "3.14.10"
+uv = "0.13.8"
+
+# Linters and scanners
+trivy = "0.76.2"
+actionlint = "1.7.12"
+"aqua:zizmorcore/zizmor" = "1.32.0"
+shellcheck = "0.11.0"
+hadolint = "2.15.1"
+gitleaks = "8.30.1"
+"pipx:yamllint" = "1.38.0"
+pre-commit = "4.7.0"
+
+# Utilities
+jq = "1.8.2"
+"aqua:mikefarah/yq" = "4.54.3"
