@@ -22,7 +22,7 @@ Early setup: nothing runs yet. This first commit holds the contributor rules and
 
 ## Contributing
 
-Read [CLAUDE.md](CLAUDE.md) first. It holds the rules every contributor follows, the architecture and the documentation map. Every change goes through a pull request.
+Read [CLAUDE.md](CLAUDE.md) first. It holds the rules every contributor follows, the architecture and the documentation map. Every change goes through a pull request. Run `make check` before every commit. Changes to platform paths (CI, infrastructure, GitOps, policies, quality gates and agent rules) request a review from their code owners ([CODEOWNERS](.github/CODEOWNERS)). Decisions are recorded as ADRs in `docs/adr/`.
 
 ## License
 

@@ -118,9 +118,12 @@ jobs:
 
       - name: "Go: build the standard library (empty cache, CPU-bound)"
         continue-on-error: true
+        env:
+          CACHE_HIT: ${{ steps.gocache.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.gocache.outputs.cache-matched-key }}
         run: |
           source "$RUNNER_TEMP/timeit.sh"
-          echo "actions/cache hit: '${{ steps.gocache.outputs.cache-hit }}' matched key: '${{ steps.gocache.outputs.cache-matched-key }}'"
+          echo "actions/cache hit: '${CACHE_HIT}' matched key: '${CACHE_MATCHED_KEY}'"
           GOCACHE="$RUNNER_TEMP/gocache-cold" timeit go_std_cold go build -a std
 
       - name: "Go: build the standard library (with the restored cache)"

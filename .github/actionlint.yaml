@@ -1,0 +1,10 @@
+# Runner labels actionlint can't know: Incredibuild's hosted runners, as listed in the Incredibuild
+# Console (see docs/benchmarks/ci-runners.md). Any other unknown label is a typo, and a job with a
+# label no runner serves stays queued.
+self-hosted-runner:
+  labels:
+    - incredibuild-ubuntu-latest
+    - incredibuild-ubuntu-2404
+    - incredibuild-ubuntu-2204
+    - incredibuild-ubuntu-2404-arm
+    - incredibuild-windows-2022
