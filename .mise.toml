@@ -3,6 +3,9 @@
 # Bump a version only by PR, following .claude/skills/dependency-versioning (7-day publish-age rule).
 # Versions checked on 2026-11-23.
 
+# Oldest mise this file was verified with (mise refuses to run older versions).
+min_version = "2026.11.9"
+
 [env]
 # The project's AWS account. Inside this repo nothing falls back to a `default` profile.
 AWS_PROFILE = "rarebit"
