@@ -6,27 +6,59 @@
 # trailing "/" matches a directory.
 #
 # Platform and process: whatever changes how code is built, deployed, secured or reviewed.
-# No catch-all owner: app code (apps/, native/), data/ and docs/ flow without a review request,
-# so a request from this file always means "this touches the platform".
+# No catch-all owner: app code (apps/, native/), data/ and most of docs/ flow without a review
+# request, so a request from this file always means "this touches the platform".
 
 # CI/CD, repository config, and this file itself
 /.github/                  @haimlevtov
 
+# Which runner fleet each CI job class uses
+/ci/                       @haimlevtov
+
 # Infrastructure (Terraform modules and the Terragrunt live layer)
 /infra/                    @haimlevtov
 
-# GitOps: Argo CD apps, cluster addons and the shared chart every service deploys with
+# GitOps: Argo CD apps, cluster addons, per-environment values and the shared chart
 /deploy/                   @haimlevtov
-# ...except per-environment values: image-tag promotion PRs must merge without a human
-/deploy/envs/
+# ...except the image-tag files: promotion PRs change only these and must merge without a human
+/deploy/envs/**/image-tags.yaml
 
-# Policy guardrails (Kyverno)
-/platform/policies/        @haimlevtov
+# The platform CLI (`plat env up/down` creates and destroys the AWS platform) and policies
+/platform/                 @haimlevtov
 
-# Quality gates and tool versions (an agent must not quietly weaken checks or swap tools)
+# Decisions: an accepted ADR is superseded by a new one, never edited
+/docs/adr/                 @haimlevtov
+
+# Quality gates, tool versions and repository hygiene: an agent must not quietly weaken checks,
+# swap tools or stop ignoring local secrets. Some of these files don't exist yet. They're listed
+# because adding one (a .gitleaksignore, a mise.toml) changes what a check or a tool does.
 /Makefile                  @haimlevtov
 /.pre-commit-config.yaml   @haimlevtov
+/.yamllint.yaml            @haimlevtov
+/.editorconfig             @haimlevtov
+# Tool versions: every config file mise reads
 /.mise.toml                @haimlevtov
+/mise.toml                 @haimlevtov
+/mise.*.toml               @haimlevtov
+/.mise.*.toml              @haimlevtov
+/.tool-versions            @haimlevtov
+/.config/                  @haimlevtov
+/.mise/                    @haimlevtov
+/mise/                     @haimlevtov
+# Scanner and linter config, including allowlists that can switch a check off
+/.gitleaks.toml            @haimlevtov
+/.gitleaksignore           @haimlevtov
+/.trivyignore              @haimlevtov
+/trivy.yaml                @haimlevtov
+/.hadolint.yaml            @haimlevtov
+/.shellcheckrc             @haimlevtov
+/zizmor.yml                @haimlevtov
+/.tflint.hcl               @haimlevtov
+/renovate.json             @haimlevtov
+# At any depth: a nested .gitattributes can mark files binary (hiding them from diff-based
+# scans), and a nested .gitignore can change what's ignored
+.gitattributes             @haimlevtov
+.gitignore                 @haimlevtov
 
 # Rules, guardrails and playbooks for contributors and agents
 /CLAUDE.md                 @haimlevtov

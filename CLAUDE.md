@@ -89,6 +89,7 @@
 ## Conventions
 - Code, comments, commits and docs are in English. Player-facing UI strings are in Hebrew (RTL).
 - Image tags: `pr-<number>-<sha7>` for PRs, `main-<sha7>` for main. Tags are immutable in ECR.
+- Promotion: a promotion PR changes only `image-tags.yaml` files under `deploy/envs/`. They are the one path under `deploy/` without a code owner (`.github/CODEOWNERS`), so promotions merge without a human; anything else in `deploy/` requests review.
 - Kubernetes labels: `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner`, `tier`.
 - Terraform: each module has a `README.md` (terraform-docs), `examples/basic` (works with plain `terraform`) and `versions.tf`. Live config lives only in `infra/live`.
 - Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses CTest; game e2e runs through `apps/bots`, browser e2e through Playwright.
@@ -124,4 +125,4 @@
 | Infra, CI and cost changes | `auditor` (`.claude/agents/auditor.md`); address its CRITICAL and HIGH findings |
 
 ## Review
-Infra, CI, Argo CD and policy paths have code owners (`.github/CODEOWNERS`), so GitHub requests their review on every PR that touches them. Approval is **not enforced yet**: the `main` ruleset requires a PR but no approvals, and a human merges every PR by hand. Required approval and code-owner review come with a separate GitHub identity for agents; until then, never merge your own PR unless a human tells you to.
+Infra, CI, Argo CD, policy, `plat` CLI, ADR and quality-gate paths have code owners (`.github/CODEOWNERS`), so GitHub requests their review on every PR that touches them. Approval is **not enforced yet**: the `main` ruleset requires a PR but no approvals, and a human merges every PR by hand. Required approval and code-owner review come with a separate GitHub identity for agents; until then, never merge your own PR unless a human tells you to.
