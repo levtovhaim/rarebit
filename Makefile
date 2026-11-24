@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration up smoke down kind-up kind-down
+.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -37,15 +37,24 @@ validator: hebrew-lib ## Vet, test (race detector) and build apps/validator into
 		$(CGO_ENV) go build -o build/validator ./cmd/validator
 
 validator-integration: hebrew-lib ## Run the validator's Postgres tests against a throwaway container (Docker)
+	. apps/validator/test/pg.sh; \
 	name="rarebit-validator-it-$$$$"; \
-	pw="$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"; \
-	trap 'docker rm -f "$$name" >/dev/null' EXIT; \
-	docker run -d --rm --name "$$name" -e POSTGRES_PASSWORD="$$pw" -p 127.0.0.1::5432 $(POSTGRES_IMAGE) >/dev/null; \
-	for _ in $$(seq 60); do docker exec "$$name" pg_isready -q -h 127.0.0.1 -U postgres && break; sleep 1; done; \
-	docker exec "$$name" pg_isready -q -h 127.0.0.1 -U postgres || { echo "Postgres didn't start" >&2; exit 1; }; \
-	port="$$(docker port "$$name" 5432/tcp | head -n1 | sed 's/.*://')"; \
-	cd apps/validator && VALIDATOR_TEST_DATABASE_URL="postgres://postgres:$$pw@127.0.0.1:$$port/postgres?sslmode=disable" \
+	trap 'docker rm -f "$$name" >/dev/null 2>&1' EXIT; \
+	pg_start "$$name" $(POSTGRES_IMAGE); \
+	cd apps/validator && VALIDATOR_TEST_DATABASE_URL="postgres://postgres:$$PG_PASSWORD@127.0.0.1:$$(pg_port "$$name")/postgres?sslmode=disable" \
 		$(CGO_ENV) go test -race -tags integration -count=1 ./...
+
+VALIDATOR_IMAGE ?= rarebit-validator:dev
+
+# GIT_SHA: exactly 7 characters (`--short` grows when 7 are ambiguous), the same as the <sha7> in
+# image tags, plus -dirty when the tree has uncommitted changes, so a local build never claims a
+# commit it doesn't match.
+validator-image: ## Build the validator image (apps/validator/Dockerfile; the context is the repo root)
+	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	docker build -f apps/validator/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(VALIDATOR_IMAGE)" .
+
+validator-image-smoke: validator-image ## Run the image non-root and read-only against a throwaway Postgres
+	bash apps/validator/test/image-smoke.sh "$(VALIDATOR_IMAGE)" "$(POSTGRES_IMAGE)"
 
 up smoke down kind-up kind-down: ## Not implemented yet (they arrive with the services, the local stack and kind)
 	@echo "make $@: not implemented yet" >&2; exit 2

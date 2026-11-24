@@ -7,7 +7,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | Component | Technology | Role | Status |
 |---|---|---|---|
 | `native/hebrew-normalize` | C++20 static library, C API | Normalizes answers and matches them against word-list entries ([README](../native/hebrew-normalize/README.md), ADRs 0008–0011) | built |
-| `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`: `POST /v1/validate`, HTTP/JSON ([README](../apps/validator/README.md), ADR 0013). The same binary runs the `migrate` job (schema migrations and the word-list load, ADRs 0014 and 0016) and later the `rarity` job. | built (no image yet) |
+| `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`: `POST /v1/validate`, HTTP/JSON ([README](../apps/validator/README.md), ADR 0013). The same binary runs the `migrate` job (schema migrations and the word-list load, ADRs 0014 and 0016) and later the `rarity` job. Image: distroless, built and smoke-tested locally (ADR 0017). | built (image not in a registry yet) |
 | `apps/game` | Node.js, TypeScript, Socket.IO | Server-authoritative rounds. All room and matchmaking state is in Redis, so any pod can serve any room. | planned |
 | `apps/web` | React, Vite | Hebrew (RTL) UI for phones, served as static files by nginx-unprivileged; supports `BASE_PATH` | planned |
 | `apps/bots` | TypeScript | Simulated players: load tests, synthetic monitoring (a full game, exit 0 or 1), chaos observation, and the test arena's personas and bot swarm | planned |
@@ -32,10 +32,10 @@ phone ──WebSocket──> game ──> validator ──> Postgres (word lists
 ## Content changes
 
 ```
-content agents / contributors ──PR──> data/ ──> data CI ──> preview ──> review ──> merge ──> validator migrate Job ──> Postgres
+content agents / contributors ──PR──> data/ ──> data CI ──> preview ──> review ──> merge ──> validator image build ──> validator migrate Job ──> Postgres
 ```
 
-Word lists and categories change only by pull request; the `validator migrate` Job is the only writer of content into the database. It computes each entry's keys with the same library `serve` uses on answers, and replaces the lists in one transaction (ADR 0014).
+Word lists and categories change only by pull request; the `validator migrate` Job is the only writer of content into the database. It computes each entry's keys with the same library `serve` uses on answers, and replaces the lists in one transaction (ADR 0014). The lists ship inside the validator image, so a content change is a new image, rolled out like a code change (ADR 0018).
 
 ## Data pipeline
 

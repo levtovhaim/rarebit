@@ -3,6 +3,8 @@
 //	validator serve     the HTTP API (POST /v1/validate) and the runtime endpoints
 //	validator migrate   apply the schema migrations, then load data/categories into the database
 //	validator version   print the version and exit
+//	validator check-ready   exit 0 if the server on this host is ready (for health checks;
+//	                        the image has no shell or curl)
 //
 // Settings come from environment variables (internal/config).
 package main
@@ -33,6 +35,8 @@ import (
 // version is the git SHA, set at build time: -ldflags "-X main.version=<sha7>".
 var version string
 
+const usage = "usage: validator serve|migrate|version|check-ready"
+
 const (
 	requestTimeout = 3 * time.Second
 	readyTimeout   = time.Second
@@ -42,11 +46,22 @@ const (
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: validator serve|migrate|version")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
-	if os.Args[1] == "version" {
+	switch os.Args[1] {
+	case "version":
 		fmt.Println(buildVersion())
+		return
+	case "check-ready": // needs only VALIDATOR_ADDR, not the database settings
+		addr := os.Getenv("VALIDATOR_ADDR")
+		if addr == "" {
+			addr = config.DefaultAddr
+		}
+		if err := server.CheckReady(addr, 2*time.Second); err != nil {
+			fmt.Fprintln(os.Stderr, "not ready:", err)
+			os.Exit(1)
+		}
 		return
 	}
 	cfg, err := config.Load(os.Getenv)
@@ -65,7 +80,7 @@ func main() {
 	case "migrate":
 		err = runMigrate(ctx, cfg, log)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: validator serve|migrate|version")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
 	if err != nil {

@@ -224,3 +224,29 @@ func TestRunReturnsServeErrors(t *testing.T) {
 		t.Error("Run() on a closed listener = nil, want the error")
 	}
 }
+
+func TestCheckReady(t *testing.T) {
+	ready := httptest.NewServer(newServer(fakeValidator{}, fakeReady{}).Handler())
+	defer ready.Close()
+	notReady := httptest.NewServer(newServer(fakeValidator{}, fakeReady{err: errors.New("db down")}).Handler())
+	defer notReady.Close()
+	port := func(s *httptest.Server) string { _, p, _ := net.SplitHostPort(s.Listener.Addr().String()); return p }
+
+	tests := []struct {
+		name, addr string
+		wantErr    bool
+	}{
+		{"ready, any-host address", ":" + port(ready), false},
+		{"ready, explicit host", "127.0.0.1:" + port(ready), false},
+		{"not ready", ":" + port(notReady), true},
+		{"nothing listening", "127.0.0.1:1", true},
+		{"bad address", "no-port", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := CheckReady(tt.addr, time.Second); (err != nil) != tt.wantErr {
+				t.Errorf("CheckReady(%q) = %v, want error: %v", tt.addr, err, tt.wantErr)
+			}
+		})
+	}
+}
