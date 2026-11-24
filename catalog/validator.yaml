@@ -1,0 +1,22 @@
+# Service catalog entry (catalog/README.md).
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: validator
+  description: Checks game answers against the word lists in Postgres, using native/hebrew-normalize through cgo.
+  labels:
+    tier: "1" # without it every answer goes to a room vote: rounds finish, but not correctly scored
+  links:
+    - url: https://github.com/levtovhaim/rarebit/blob/main/docs/runbooks/validator.md
+      title: Runbook
+    - url: https://github.com/levtovhaim/rarebit/blob/main/apps/validator/README.md
+      title: README
+spec:
+  type: service
+  lifecycle: experimental
+  owner: user:haimlevtov
+  system: rarebit
+  dependsOn:
+    - resource:postgres
+# SLOs: none yet. They come with the monitoring stack; the indicators will be /v1/validate
+# errors and latency (validator_http_requests_total, validator_http_request_duration_seconds).

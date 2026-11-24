@@ -7,7 +7,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | Component | Technology | Role | Status |
 |---|---|---|---|
 | `native/hebrew-normalize` | C++20 static library, C API | Normalizes answers and matches them against word-list entries ([README](../native/hebrew-normalize/README.md), ADRs 0008–0011) | built |
-| `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`. The same image runs the `migrate` and `rarity` jobs. Its protocol is decided with the service. | planned |
+| `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`: `POST /v1/validate`, HTTP/JSON ([README](../apps/validator/README.md), ADR 0013). The same binary runs the `migrate` job (schema migrations and the word-list load, ADRs 0014 and 0016) and later the `rarity` job. | built (no image yet) |
 | `apps/game` | Node.js, TypeScript, Socket.IO | Server-authoritative rounds. All room and matchmaking state is in Redis, so any pod can serve any room. | planned |
 | `apps/web` | React, Vite | Hebrew (RTL) UI for phones, served as static files by nginx-unprivileged; supports `BASE_PATH` | planned |
 | `apps/bots` | TypeScript | Simulated players: load tests, synthetic monitoring (a full game, exit 0 or 1), chaos observation, and the test arena's personas and bot swarm | planned |
@@ -15,7 +15,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Seeded with the six regular categories. | seeded |
 | `native/rarebit-cli` | C++ (CMake) | Word check and a local bots runner on Linux, Windows and macOS | planned |
 | Redis | | Room and matchmaking state, Socket.IO fan-out between game pods, the answer-event stream | planned |
-| Postgres | | Word lists, answer history, the rarity table | planned |
+| Postgres | 18 | Word lists (schema in `apps/validator`, tested against a local container), answer history, the rarity table | schema for word lists |
 
 ## Request path
 
@@ -27,15 +27,15 @@ phone ──WebSocket──> game ──> validator ──> Postgres (word lists
 ```
 
 - **Game ↔ phones:** Socket.IO uses the WebSocket transport only. Since every pod reads room state from Redis, no sticky sessions are needed.
-- **Validator:** one call per answer. It normalizes the answer once, looks for an exact key match first, then a spelling variant or a one-edit typo among a few candidates ([hebrew-normalize](../native/hebrew-normalize/README.md)).
+- **Validator:** one HTTP call per answer. It normalizes the answer once, looks for an exact key match first, then a spelling variant or a one-edit typo among a few candidates ([hebrew-normalize](../native/hebrew-normalize/README.md)), with up to four indexed Postgres queries (ADR 0015). If it can't answer (503, or no ready pod), the game sends the answer to the room vote, as it does for `unknown` answers.
 
 ## Content changes
 
 ```
-content agents / contributors ──PR──> data/ ──> data CI ──> preview ──> review ──> merge ──> loader Job ──> Postgres
+content agents / contributors ──PR──> data/ ──> data CI ──> preview ──> review ──> merge ──> validator migrate Job ──> Postgres
 ```
 
-Word lists and categories change only by pull request; the loader Job is the only writer of content into the database.
+Word lists and categories change only by pull request; the `validator migrate` Job is the only writer of content into the database. It computes each entry's keys with the same library `serve` uses on answers, and replaces the lists in one transaction (ADR 0014).
 
 ## Data pipeline
 

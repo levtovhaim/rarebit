@@ -46,7 +46,7 @@ The key holds only Hebrew letters, `a`–`z` and `0`–`9`. NFC and NFD input gi
   - Output functions work like `snprintf`: they return the full length and write at most `out_cap - 1` bytes plus a NUL.
   - `HN_ERROR` (or `HN_MATCH_ERROR`) means an input over `HN_MAX_INPUT_BYTES` (4096), `in` was NULL with a length, or an allocation failed.
 - **C++:** `include/hebrew_normalize/hebrew_normalize.hpp`, namespace `hebrew_normalize`. It has no size cap; the C API adds it.
-- **Linking:** the archive is `libhebrew_normalize.a`. A C or Go program also links the C++ runtime: `-lhebrew_normalize -lstdc++ -lm`. The code is position-independent, so it links into PIE binaries (ADR 0010).
+- **Linking:** the archive is `libhebrew_normalize.a`. A C or Go program also links the C++ runtime: `-lhebrew_normalize -lstdc++ -lm` on Linux, `-lhebrew_normalize -lc++` on macOS (not verified yet). The code is position-independent, so it links into PIE binaries (ADR 0010).
 - **Install** the archive and headers into a prefix. A plain configure builds no tests and needs no network, which suits an image build:
 
   ```bash

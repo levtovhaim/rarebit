@@ -83,6 +83,11 @@ repos:
         language: system
         files: ^data/
         pass_filenames: false
+      - id: gofmt
+        name: gofmt
+        entry: bash -c 'out="$(gofmt -l "$@")"; [ -z "$out" ] || { printf "gofmt -w these files:\n%s\n" "$out"; exit 1; }' --
+        language: system
+        types: [go]
       - id: terraform-fmt
         name: terraform fmt
         entry: bash -c 'rc=0; for f in "$@"; do terraform fmt -check -diff "$f" || rc=1; done; exit $rc' --
