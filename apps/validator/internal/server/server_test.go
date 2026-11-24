@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,15 +24,19 @@ func (f fakeValidator) Validate(context.Context, string, string, string) (valida
 	return f.out, f.err
 }
 
-type fakeReady struct{ err error }
+type fakeReady struct {
+	err        error
+	normalizer string
+}
 
 func (f fakeReady) Ready(context.Context) error { return f.err }
+func (f fakeReady) ContentNormalizer() string   { return f.normalizer }
 
 func newServer(v Validator, ready ReadyChecker) *Server {
 	return New(Options{
 		Validator: v, Ready: ready, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
-		Version: Version{Version: "abc1234"}, BodyLimit: 256,
-		RequestTimeout: time.Second, ReadyTimeout: time.Second,
+		Version: Version{Version: "abc1234", Normalizer: "0.1.0"}, BodyLimit: 256,
+		RequestTimeout: time.Second, ReadyTimeout: time.Second, ReadHeaderTimeout: time.Second,
 	})
 }
 
@@ -80,7 +85,7 @@ func TestReadyz(t *testing.T) {
 	if code, _ := do(t, s, "GET", "/readyz", ""); code != 200 {
 		t.Errorf("ready: got %d, want 200", code)
 	}
-	if code, _ := do(t, newServer(fakeValidator{}, fakeReady{errors.New("db down")}), "GET", "/readyz", ""); code != 503 {
+	if code, _ := do(t, newServer(fakeValidator{}, fakeReady{err: errors.New("db down")}), "GET", "/readyz", ""); code != 503 {
 		t.Errorf("database down: got %d, want 503", code)
 	}
 	s.StartDrain()
@@ -108,5 +113,114 @@ func TestVersionAndMetrics(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("/metrics is missing %s", want)
 		}
+	}
+}
+
+func TestNormalizerMismatchMetric(t *testing.T) {
+	tests := []struct {
+		name, loaded, want string
+	}{
+		{"same version", "0.1.0", "validator_content_normalizer_mismatch 0"},
+		{"other version", "0.0.9", "validator_content_normalizer_mismatch 1"},
+		{"nothing loaded yet", "", "validator_content_normalizer_mismatch 0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newServer(fakeValidator{}, fakeReady{normalizer: tt.loaded})
+			if code, _ := do(t, s, "GET", "/readyz", ""); code != 200 {
+				t.Errorf("/readyz = %d, want 200: a mismatch must not fail readiness", code)
+			}
+			if _, body := do(t, s, "GET", "/metrics", ""); !strings.Contains(body, tt.want) {
+				t.Errorf("/metrics is missing %q", tt.want)
+			}
+		})
+	}
+}
+
+// blockingValidator holds one request until release is closed, to have a request in flight.
+type blockingValidator struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b blockingValidator) Validate(ctx context.Context, _, _, _ string) (validate.Outcome, error) {
+	close(b.started)
+	select {
+	case <-b.release:
+		return validate.Outcome{Result: validate.Unknown}, nil
+	case <-ctx.Done():
+		return validate.Outcome{}, ctx.Err()
+	}
+}
+
+func TestRunDrains(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "http://" + ln.Addr().String()
+	v := blockingValidator{started: make(chan struct{}), release: make(chan struct{})}
+	s := newServer(v, fakeReady{})
+	ctx, cancel := context.WithCancel(context.Background())
+	drainStarted := make(chan struct{})
+	const delay = 300 * time.Millisecond
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Run(ctx, ln, Drain{Delay: delay, ShutdownTimeout: 3 * time.Second, OnStart: func() { close(drainStarted) }})
+	}()
+
+	// A request that is still in flight when the drain starts, and when Shutdown starts.
+	inflight := make(chan int, 1)
+	go func() {
+		resp, err := http.Post(base+"/v1/validate", "application/json", strings.NewReader(`{}`))
+		if err != nil {
+			inflight <- 0
+			return
+		}
+		resp.Body.Close()
+		inflight <- resp.StatusCode
+	}()
+	<-v.started
+	cancel()
+	<-drainStarted
+
+	// While draining: still serving, /readyz fails, and every response closes its connection.
+	resp, err := http.Get(base + "/readyz")
+	if err != nil {
+		t.Fatalf("GET /readyz while draining: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 503 || !resp.Close {
+		t.Errorf("/readyz while draining = %d, close=%v; want 503 with Connection: close", resp.StatusCode, resp.Close)
+	}
+	resp, err = http.Get(base + "/healthz")
+	if err != nil || resp.StatusCode != 200 {
+		t.Errorf("/healthz while draining = %v %v, want 200", resp, err)
+	} else {
+		resp.Body.Close()
+	}
+
+	time.Sleep(delay + 100*time.Millisecond) // Shutdown has begun; the request is still running
+	close(v.release)
+	if code := <-inflight; code != 200 {
+		t.Errorf("in-flight request = %d, want 200: Shutdown must let it finish", code)
+	}
+	if err := <-done; err != nil {
+		t.Errorf("Run() = %v, want nil after a clean drain", err)
+	}
+	if _, err := http.Get(base + "/healthz"); err == nil {
+		t.Error("the server still accepts connections after Run returned")
+	}
+}
+
+func TestRunReturnsServeErrors(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln.Close()
+	err = newServer(fakeValidator{}, fakeReady{}).Run(context.Background(), ln, Drain{Delay: time.Millisecond, ShutdownTimeout: time.Second})
+	if err == nil {
+		t.Error("Run() on a closed listener = nil, want the error")
 	}
 }

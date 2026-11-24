@@ -1,16 +1,20 @@
 # Service catalog
 
-One file per service, `catalog/<service>.yaml`: who owns it, how critical it is, what it depends on, and where its runbook and SLOs are. The fields follow the [Backstage](https://backstage.io/docs/features/software-catalog/descriptor-format) `Component` format, so a portal can read them later, plus a top-level `slos` field of our own. The `plat` CLI will read them too.
+One file per service, `catalog/<service>.yaml`: who owns it, how critical it is, what it depends on, and where its runbook and SLOs are. The fields follow the [Backstage](https://backstage.io/docs/features/software-catalog/descriptor-format) `Component` format, so a portal can read them later. The `plat` CLI will read them too.
 
 | Field | Meaning |
 |---|---|
 | `metadata.name` | the service name, the same as `app.kubernetes.io/name` |
+| `metadata.description` | one sentence: what it does |
 | `metadata.labels.tier` | how players feel an outage, the same value as the `tier` Kubernetes label (below) |
 | `metadata.links` | the runbook and the README |
-| `spec.owner` | who's accountable for it (`user:<github-login>`); the `owner` Kubernetes label carries the login alone, since label values can't contain `:` |
+| `spec.type` | `service` for a long-running server, `job` for batch work |
 | `spec.lifecycle` | `experimental` until it runs in a shared environment, then `production` |
+| `spec.owner` | who's accountable for it (`user:<github-login>`); the `owner` Kubernetes label carries the login alone, since label values can't contain `:` |
+| `spec.system` | always `rarebit`, the same as `app.kubernetes.io/part-of` |
 | `spec.dependsOn` | what it needs at runtime |
-| `slos` | each SLO's indicator and target. Empty until the monitoring stack records them. |
+
+SLOs are added when the monitoring stack records them: each one's indicator, target and window, in a place in the file chosen then. Until a service has SLOs, its file says so in a comment.
 
 Tiers:
 

@@ -17,7 +17,7 @@ func TestErrorsDontLeakThePassword(t *testing.T) {
 		run  func() error
 	}{
 		{"open, malformed url", func() error {
-			_, err := Open(ctx, "postgres://u:"+secret+"@127.0.0.1:notaport/db", 1)
+			_, err := Open(ctx, "postgres://u:"+secret+"@127.0.0.1:notaport/db", 1, 1)
 			return err
 		}},
 		{"connect, malformed url", func() error {
@@ -29,7 +29,7 @@ func TestErrorsDontLeakThePassword(t *testing.T) {
 			return err
 		}},
 		{"query, nothing listening", func() error {
-			s, err := Open(ctx, "postgres://u:"+secret+"@127.0.0.1:1/db?connect_timeout=2", 1)
+			s, err := Open(ctx, "postgres://u:"+secret+"@127.0.0.1:1/db?connect_timeout=2", 1, 1)
 			if err != nil {
 				return err
 			}

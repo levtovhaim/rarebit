@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -68,15 +69,28 @@ func parse(fsys fs.FS, dir string) ([]Migration, error) {
 	return out, nil
 }
 
-// Lock takes the migration lock on conn, waiting while another run holds it (or until ctx ends).
-// The lock belongs to the session, so a crashed run releases it when its connection closes.
+// lockTimeout caps how long a migration waits for a table lock once it holds the migration
+// lock. DDL waiting behind a long reader would otherwise make every new reader queue behind
+// it; failing fast lets the Job retry instead.
+const lockTimeout = "5s"
+
+// Lock takes the migration lock on conn, waiting while another run holds it (or until ctx ends),
+// then limits the session's table-lock waits to lockTimeout. The lock belongs to the session,
+// so a run that dies releases it when Postgres ends its session (store.Connect keeps that short).
 func Lock(ctx context.Context, conn *pgx.Conn) (unlock func(), err error) {
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", lockKey); err != nil {
 		return nil, fmt.Errorf("take the migration lock: %w", err)
 	}
-	return func() {
-		_, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", lockKey)
-	}, nil
+	unlock = func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_, _ = conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", lockKey)
+	}
+	if _, err := conn.Exec(ctx, "SET lock_timeout = '"+lockTimeout+"'"); err != nil {
+		unlock()
+		return nil, err
+	}
+	return unlock, nil
 }
 
 // Up applies the migrations that aren't applied yet and returns how many it applied. Call it
@@ -89,21 +103,21 @@ func Up(ctx context.Context, conn *pgx.Conn, migrations []Migration, log *slog.L
 		applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		return 0, fmt.Errorf("create schema_migrations: %w", err)
 	}
-	applied := map[int]string{}
 	rows, err := conn.Query(ctx, "SELECT version, checksum FROM schema_migrations")
 	if err != nil {
 		return 0, err
 	}
-	for rows.Next() {
-		var v int
-		var sum string
-		if err := rows.Scan(&v, &sum); err != nil {
-			return 0, err
-		}
-		applied[v] = sum
+	type row struct {
+		Version  int
+		Checksum string
 	}
-	if err := rows.Err(); err != nil {
+	done, err := pgx.CollectRows(rows, pgx.RowToStructByPos[row]) // closes rows on every path
+	if err != nil {
 		return 0, err
+	}
+	applied := map[int]string{}
+	for _, r := range done {
+		applied[r.Version] = r.Checksum
 	}
 
 	n := 0

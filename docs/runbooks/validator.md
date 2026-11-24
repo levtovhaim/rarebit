@@ -1,25 +1,30 @@
 # Runbook: validator not ready, or `validator migrate` fails
 
-- **Alert(s):** none yet. They come with the monitoring stack: `/readyz` failing on every pod, `/v1/validate` 5xx rate, a failed migrate Job.
+- **Alert(s):** none yet; they're [issue 23](https://github.com/levtovhaim/rarebit/issues/23): no ready validator pod, the `/v1/validate` 5xx rate, a failed migrate Job, a lasting normalizer mismatch.
 - **Service:** [`catalog/validator.yaml`](../../catalog/validator.yaml)
 - **Severity:** page (players' answers can't be checked)
-- **Last fired on purpose:** 2026-11-24, locally: Postgres paused under a running validator, `/readyz` → 503 `not_ready` and `/v1/validate` → 503 `unavailable`; both back to 200 after unpausing.
+- **Last fired on purpose:** 2026-11-24, locally:
+  - Postgres paused under a running validator: `/readyz` → 503 `not_ready`, `/v1/validate` → 503 `unavailable`, both back to 200 after unpausing;
+  - a proxy that stopped answering (the integration test): lookups and readiness served again 1.5 s after it recovered.
 
 ## What it means
 
 `/readyz` is 503 when one of these holds:
-- **draining:** the pod got SIGTERM. Expected during rollouts and node drains, and it lasts `VALIDATOR_DRAIN_DELAY` plus up to `VALIDATOR_SHUTDOWN_TIMEOUT`.
-- **not ready:** Postgres didn't answer `SELECT EXISTS (SELECT 1 FROM content_loads)` within 1 s. Either the database is unreachable or slow, or the schema and word lists were never loaded (no successful `validator migrate` against this database).
+- **draining:** the pod got SIGTERM. Expected during rollouts and node drains. It lasts `VALIDATOR_DRAIN_DELAY` plus up to `VALIDATOR_SHUTDOWN_TIMEOUT`.
+- **not ready:** one of these:
+  - Postgres didn't answer within 1 s;
+  - the schema is older than this image's newest migration;
+  - the word lists were never loaded (no successful `validator migrate` against this database).
 
 `validator migrate` exits 1 with a JSON log line `"msg":"migrate failed"` and the cause in `err`.
 
 ## Impact on players
 
-With no ready validator pod, the Service has no endpoints. The game should treat every answer as `unknown` and send it to the room vote: rounds still finish, but every answer needs a vote. Nothing is lost; validation works again as soon as one pod is ready.
+With no ready validator pod, the Service has no endpoints. The game should treat every answer as `unknown` and send it to the room vote: rounds still finish, but every answer needs a vote. Nothing is lost, and validation works again as soon as one pod is ready.
 
 ## Diagnose (first 5 minutes)
 
-1. Is it every pod or one? Every pod points at Postgres or the content load; one pod points at that pod (its node, its network).
+1. Is it every pod or one? Every pod points at Postgres, the schema or the content load. One pod points at that pod (its node, its network).
    ```bash
    kubectl -n <namespace> get pods -l app.kubernetes.io/name=validator
    kubectl -n <namespace> describe pod <pod>      # readiness probe failures in Events
@@ -28,8 +33,9 @@ With no ready validator pod, the Service has no endpoints. The game should treat
    ```bash
    kubectl -n <namespace> logs <pod> --since=10m | grep -E '"level":"(WARN|ERROR)"'
    ```
-   - `timeout: context deadline exceeded`, `connection refused`, `no such host`: Postgres is down, overloaded or unreachable (check the database's own pods, and NetworkPolicies).
-   - `relation "content_loads" does not exist`: never migrated; see the migrate Job.
+   - `timeout: context deadline exceeded`, `connection refused`, `no such host`: Postgres is down, overloaded or unreachable. Check the database's own pods, and NetworkPolicies.
+   - `relation "schema_migrations" does not exist`: never migrated; see the migrate Job.
+   - `the schema is at migration N and this binary needs M`: this image is newer than the schema; the migrate Job for this release didn't run or failed.
    - `no word lists loaded yet`: the schema exists but no content load finished.
 3. The migrate Job:
    ```bash
@@ -38,19 +44,30 @@ With no ready validator pod, the Service has no endpoints. The game should treat
    ```
 4. Locally (docker compose or a shell): `curl -s localhost:8080/readyz` and the process's stdout.
 
+A ready pod that logs `the word lists were keyed by another normalizer version` is in a rollout with mixed images. That's expected for its duration; if it lasts, finish or roll back the rollout ([issue 24](https://github.com/levtovhaim/rarebit/issues/24)).
+
 ## Fix
 
 Match the error in the log:
 
 | Error | Cause | Fix |
 |---|---|---|
-| `invalid configuration` | an env var is missing or out of range; the message lists each one | fix the values in the chart or the Secret; nothing starts until then |
+| `invalid configuration` | an env var is missing, out of range, or `DATABASE_URL isn't a valid Postgres URL`; the message lists each problem | fix the value in the chart (a PR), or the secret it comes from (SSM, through External Secrets: state-changing, see below) |
+| `no category files in <dir>/categories` | `VALIDATOR_DATA_DIR` is wrong, or the data files aren't in the image or the volume | fix the path or the packaging in the chart (a PR), then rerun the Job |
 | `<file>.json: ...` | a category file the loader rejects (it reads every file before touching the database) | fix the file in a PR (`python data/tools/check_data.py` shows most problems), then rerun the Job |
 | `migration NNNN_x changed after it was applied` | someone edited a merged migration | revert the edit and add a new migration with the change |
-| `take the migration lock: ... deadline exceeded` | another run held the lock for 5 minutes | find it: `SELECT pid, state, query_start, query FROM pg_stat_activity WHERE application_name = 'rarebit-validator-migrate';` let it finish, or end that run, then rerun |
+| `take the migration lock: ... deadline exceeded` | another run held the lock for the whole 5-minute run limit | find it: `SELECT pid, state, query_start, query FROM pg_stat_activity WHERE application_name = 'rarebit-validator-migrate';` If it's a stuck run, end it with `SELECT pg_terminate_backend(<pid>);` (state-changing), then rerun the Job |
+| `lock timeout` during a migration | the DDL waited 5 s for a table lock held by a long transaction | rerun the Job when the long transaction ends; find it in `pg_stat_activity` (`xact_start`) |
 | `failed to connect ...` | Postgres is unreachable from the Job | as for "not ready" above |
 
-Rerunning the migrate Job is always safe: applied migrations are skipped, and an unchanged content load does nothing. Deleting and recreating a Job is a state-changing command: in a shared environment a human runs it or approves it (CLAUDE.md → Rules, rule 2); in your own preview namespace you may.
+Rerunning the migrate Job is always safe: applied migrations are skipped, and an unchanged content load does nothing.
+
+**State-changing commands:**
+- deleting and recreating a Job (`kubectl delete job <migrate-job>`, then a resync);
+- `pg_terminate_backend`;
+- changing a secret in SSM.
+
+In a shared environment a human runs them or approves the exact command (CLAUDE.md → Rules, rule 2); in your own preview namespace you may run them yourself.
 
 ## Verify
 
@@ -60,12 +77,12 @@ Rerunning the migrate Job is always safe: applied migrations are skipped, and an
 
 ## Roll back or escalate
 
-- A bad content load: revert the data PR; the next migrate run loads the previous files.
-- A bad migration: migrations go forward only. Roll the image back (the old code must work with the new schema), then fix it with a new migration.
-- Postgres itself down: follow the database's runbook. The validator recovers by itself once Postgres answers.
+- **A bad content load:** revert the data PR; the next migrate run loads the previous files. A category removed by mistake comes back when its file does (retired categories keep their row).
+- **A bad migration:** migrations go forward only. Roll the image back (the old code must work with the new schema), then fix it with a new migration.
+- **Postgres itself down:** follow the database's runbook. The validator recovers by itself within a couple of seconds of Postgres answering: connection attempts and dials time out after 2 s, and readiness uses a connection of its own.
 
 ## Prevention
 
 - `make check` runs the word-list check on every data change, before the loader ever sees it.
-- The migrate Job runs before each rollout, so new pods never start against an unmigrated schema.
-- Alerts with this runbook linked, when the monitoring stack arrives.
+- The migrate Job will run before each rollout (ADR 0014, a follow-up with the chart), so new pods never start against an unmigrated schema; readiness also refuses a schema older than the image.
+- Alerts with this runbook linked: [issue 23](https://github.com/levtovhaim/rarebit/issues/23).

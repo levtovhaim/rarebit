@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -59,8 +58,6 @@ type Set struct {
 	SHA256     string // over every file, in name order: unchanged files give the same hash
 }
 
-var categoryID = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-
 // Read loads and checks <dir>/categories/*.json.
 func Read(dir string) (Set, error) {
 	paths, err := filepath.Glob(filepath.Join(dir, "categories", "*.json"))
@@ -101,8 +98,8 @@ func parse(raw []byte, stem string) (Category, error) {
 		return c, err
 	}
 	var errs []error
-	if c.ID != stem || !categoryID.MatchString(c.ID) {
-		errs = append(errs, fmt.Errorf("id %q must match the file name and %s", c.ID, categoryID))
+	if c.ID != stem || !validate.CategoryID.MatchString(c.ID) {
+		errs = append(errs, fmt.Errorf("id %q must match the file name and %s", c.ID, validate.CategoryID))
 	}
 	if c.Name == "" {
 		errs = append(errs, errors.New("name is empty"))
@@ -150,9 +147,10 @@ func Keys(word string) (Word, error) {
 	return w, nil
 }
 
-// Apply replaces the database's word lists with set inside tx and records the load. It does
-// nothing when the latest load has the same files and the same normalizer, so running it on
-// every deploy is cheap. Readers keep seeing the previous lists until tx commits.
+// Apply replaces the database's word lists with set inside tx and records the load. A category
+// whose file is gone is retired (kept, with its lists emptied), never deleted. It does nothing
+// when the latest load has the same files and the same normalizer, so running it on every
+// deploy is cheap. Readers keep seeing the previous lists until tx commits.
 func Apply(ctx context.Context, tx pgx.Tx, set Set) (changed bool, err error) {
 	var lastSHA, lastNormalizer, lastUnicode string
 	err = tx.QueryRow(ctx, `SELECT content_sha256, normalizer_version, unicode_version
@@ -168,7 +166,12 @@ func Apply(ctx context.Context, tx pgx.Tx, set Set) (changed bool, err error) {
 	for i, c := range set.Categories {
 		ids[i] = c.ID
 	}
-	if _, err := tx.Exec(ctx, "DELETE FROM categories WHERE NOT (id = ANY($1))", ids); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE categories SET retired_at = now()
+		WHERE retired_at IS NULL AND NOT (id = ANY($1))`, ids); err != nil {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM word_lists
+		WHERE category_id IN (SELECT id FROM categories WHERE retired_at IS NOT NULL)`); err != nil {
 		return false, err
 	}
 	for _, c := range set.Categories {
@@ -185,7 +188,7 @@ func Apply(ctx context.Context, tx pgx.Tx, set Set) (changed bool, err error) {
 
 func applyCategory(ctx context.Context, tx pgx.Tx, c Category) error {
 	if _, err := tx.Exec(ctx, `INSERT INTO categories (id, name, kind) VALUES ($1, $2, $3)
-		ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, kind = EXCLUDED.kind`,
+		ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, kind = EXCLUDED.kind, retired_at = NULL`,
 		c.ID, c.Name, c.Kind); err != nil {
 		return err
 	}

@@ -21,7 +21,7 @@ NATIVE_PRESET ?= $(if $(filter Windows_NT,$(OS)),windows-msvc,$(if $(filter Darw
 native: ## Build and test the C++ code in native/ (NATIVE_PRESET=linux-gcc-asan for sanitizers)
 	cd native && cmake --preset $(NATIVE_PRESET) && cmake --build --preset $(NATIVE_PRESET) && ctest --preset $(NATIVE_PRESET)
 
-# The validator calls native/hebrew-normalize through cgo (Linux and macOS; on Windows use WSL).
+# The validator calls native/hebrew-normalize through cgo (Linux; macOS unverified; on Windows use WSL).
 # hebrew-lib installs the archive and headers into HN_PREFIX, and cgo finds them there.
 HN_PREFIX ?= $(CURDIR)/native/build/hn-prefix
 CGO_ENV = CGO_ENABLED=1 CGO_CFLAGS="-I$(HN_PREFIX)/include" CGO_LDFLAGS="-L$(HN_PREFIX)/lib"
@@ -38,12 +38,13 @@ validator: hebrew-lib ## Vet, test (race detector) and build apps/validator into
 
 validator-integration: hebrew-lib ## Run the validator's Postgres tests against a throwaway container (Docker)
 	name="rarebit-validator-it-$$$$"; \
+	pw="$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"; \
 	trap 'docker rm -f "$$name" >/dev/null' EXIT; \
-	docker run -d --rm --name "$$name" -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1::5432 $(POSTGRES_IMAGE) >/dev/null; \
+	docker run -d --rm --name "$$name" -e POSTGRES_PASSWORD="$$pw" -p 127.0.0.1::5432 $(POSTGRES_IMAGE) >/dev/null; \
 	for _ in $$(seq 60); do docker exec "$$name" pg_isready -q -h 127.0.0.1 -U postgres && break; sleep 1; done; \
 	docker exec "$$name" pg_isready -q -h 127.0.0.1 -U postgres || { echo "Postgres didn't start" >&2; exit 1; }; \
 	port="$$(docker port "$$name" 5432/tcp | head -n1 | sed 's/.*://')"; \
-	cd apps/validator && VALIDATOR_TEST_DATABASE_URL="postgres://postgres@127.0.0.1:$$port/postgres?sslmode=disable" \
+	cd apps/validator && VALIDATOR_TEST_DATABASE_URL="postgres://postgres:$$pw@127.0.0.1:$$port/postgres?sslmode=disable" \
 		$(CGO_ENV) go test -race -tags integration -count=1 ./...
 
 up smoke down kind-up kind-down: ## Not implemented yet (they arrive with the services, the local stack and kind)

@@ -3,6 +3,7 @@ package validate
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/levtovhaim/rarebit/apps/validator/internal/hebrew"
@@ -97,6 +98,9 @@ func TestValidateRequestErrors(t *testing.T) {
 		want                   error
 	}{
 		{"unknown category", "planet", "א", ErrUnknownCategory},
+		{"category with a NUL", "\x00", "א", ErrUnknownCategory},
+		{"category in capitals", "Country", "א", ErrUnknownCategory},
+		{"category too long", "c" + strings.Repeat("x", 64), "א", ErrUnknownCategory},
 		{"final-form letter", "country", "ם", ErrBadLetter},
 		{"two letters", "country", "אב", ErrBadLetter},
 		{"latin letter", "country", "a", ErrBadLetter},
@@ -107,6 +111,17 @@ func TestValidateRequestErrors(t *testing.T) {
 				t.Errorf("Validate() error = %v, want %v", err, tt.want)
 			}
 		})
+	}
+}
+
+// A malformed id must be rejected before any query: with a failing store, a query would
+// surface as the store's error instead of ErrUnknownCategory.
+func TestValidateRejectsMalformedCategoriesWithoutAQuery(t *testing.T) {
+	v := New(&fakeStore{words: map[string][]string{}, err: errors.New("db down")}, 64, 500)
+	for _, c := range []string{"\x00", "", "Country", "c" + strings.Repeat("x", 64), "a b"} {
+		if _, err := v.Validate(context.Background(), c, "א", "אבג"); !errors.Is(err, ErrUnknownCategory) {
+			t.Errorf("Validate(category %q) error = %v, want ErrUnknownCategory", c, err)
+		}
 	}
 }
 

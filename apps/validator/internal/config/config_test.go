@@ -26,11 +26,12 @@ func TestLoadRejects(t *testing.T) {
 		wantErr string
 	}{
 		{"missing database url", map[string]string{}, "DATABASE_URL is required"},
-		{"runes not a number", map[string]string{"DATABASE_URL": "x", "VALIDATOR_MAX_ANSWER_RUNES": "lots"}, "VALIDATOR_MAX_ANSWER_RUNES"},
-		{"runes out of range", map[string]string{"DATABASE_URL": "x", "VALIDATOR_MAX_ANSWER_RUNES": "0"}, "from 1 to 256"},
-		{"bad duration", map[string]string{"DATABASE_URL": "x", "VALIDATOR_DRAIN_DELAY": "soon"}, "VALIDATOR_DRAIN_DELAY"},
-		{"shutdown too short", map[string]string{"DATABASE_URL": "x", "VALIDATOR_SHUTDOWN_TIMEOUT": "10ms"}, "VALIDATOR_SHUTDOWN_TIMEOUT"},
-		{"bad log level", map[string]string{"DATABASE_URL": "x", "LOG_LEVEL": "loud"}, "LOG_LEVEL"},
+		{"malformed database url", map[string]string{"DATABASE_URL": "postgres://u:pw@host:notaport/db"}, "isn't a valid Postgres URL"},
+		{"runes not a number", map[string]string{"DATABASE_URL": "postgres://x", "VALIDATOR_MAX_ANSWER_RUNES": "lots"}, "VALIDATOR_MAX_ANSWER_RUNES"},
+		{"runes out of range", map[string]string{"DATABASE_URL": "postgres://x", "VALIDATOR_MAX_ANSWER_RUNES": "0"}, "from 1 to 256"},
+		{"bad duration", map[string]string{"DATABASE_URL": "postgres://x", "VALIDATOR_DRAIN_DELAY": "soon"}, "VALIDATOR_DRAIN_DELAY"},
+		{"shutdown too short", map[string]string{"DATABASE_URL": "postgres://x", "VALIDATOR_SHUTDOWN_TIMEOUT": "10ms"}, "VALIDATOR_SHUTDOWN_TIMEOUT"},
+		{"bad log level", map[string]string{"DATABASE_URL": "postgres://x", "LOG_LEVEL": "loud"}, "LOG_LEVEL"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -39,6 +40,13 @@ func TestLoadRejects(t *testing.T) {
 				t.Errorf("Load() error = %v, want it to mention %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLoadDoesNotEchoTheDatabasePassword(t *testing.T) {
+	_, err := Load(env(map[string]string{"DATABASE_URL": "postgres://u:s3cret-pw@host:notaport/db"}))
+	if err == nil || strings.Contains(err.Error(), "s3cret-pw") {
+		t.Errorf("Load() error = %v, want an error without the password", err)
 	}
 }
 

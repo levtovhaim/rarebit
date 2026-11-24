@@ -11,7 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -37,6 +37,7 @@ const (
 	requestTimeout = 3 * time.Second
 	readyTimeout   = time.Second
 	migrateTimeout = 5 * time.Minute
+	closeTimeout   = 3 * time.Second
 )
 
 func main() {
@@ -74,11 +75,26 @@ func main() {
 }
 
 func serve(ctx context.Context, stopSignals func(), cfg config.Config, log *slog.Logger) error {
-	db, err := store.Open(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
+	migrations, err := migrate.Embedded()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	db, err := store.Open(ctx, cfg.DatabaseURL, cfg.DBMaxConns, len(migrations))
+	if err != nil {
+		return err
+	}
+	// After Run, in-flight requests are done with their connections. Closing the pool waits for
+	// pgx to finish closing broken connections (up to 15 s against an unresponsive server), and
+	// the process exits right after anyway, so don't let it eat the pod's grace period.
+	defer func() {
+		closed := make(chan struct{})
+		go func() { db.Close(); close(closed) }()
+		select {
+		case <-closed:
+		case <-time.After(closeTimeout):
+			log.Warn("closing the database connections timed out", "timeout", closeTimeout.String())
+		}
+	}()
 
 	api := server.New(server.Options{
 		Validator: validate.New(db, cfg.MaxAnswerRunes, cfg.FuzzyCandidates),
@@ -87,46 +103,20 @@ func serve(ctx context.Context, stopSignals func(), cfg config.Config, log *slog
 		Version: server.Version{
 			Version: buildVersion(), Normalizer: hebrew.Version(), Unicode: hebrew.UnicodeVersion(), Go: runtime.Version(),
 		},
-		BodyLimit:      cfg.RequestBodyLimit,
-		RequestTimeout: requestTimeout,
-		ReadyTimeout:   readyTimeout,
-	})
-	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           api.Handler(),
+		BodyLimit:         cfg.RequestBodyLimit,
+		RequestTimeout:    requestTimeout,
+		ReadyTimeout:      readyTimeout,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
-	}
-	failed := make(chan error, 1)
-	go func() { failed <- srv.ListenAndServe() }()
-	log.Info("listening", "addr", cfg.Addr)
-
-	select {
-	case err := <-failed:
+	})
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
 		return err
-	case <-ctx.Done():
 	}
-	stopSignals() // a second SIGTERM or Ctrl-C now ends the process at once
-
-	// Fail readiness first and keep serving while the endpoints controller and the load
-	// balancer catch up, then stop accepting connections and let in-flight requests finish.
-	log.Info("draining", "drain_delay", cfg.DrainDelay.String(), "shutdown_timeout", cfg.ShutdownTimeout.String())
-	api.StartDrain()
-	select {
-	case err := <-failed:
-		return err
-	case <-time.After(cfg.DrainDelay):
-	}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown: %w", err)
-	}
-	log.Info("stopped")
-	return nil
+	return api.Run(ctx, ln, server.Drain{
+		Delay:           cfg.DrainDelay,
+		ShutdownTimeout: cfg.ShutdownTimeout,
+		OnStart:         stopSignals, // a second SIGTERM or Ctrl-C now ends the process at once
+	})
 }
 
 func runMigrate(ctx context.Context, cfg config.Config, log *slog.Logger) error {
@@ -144,7 +134,11 @@ func runMigrate(ctx context.Context, cfg config.Config, log *slog.Logger) error 
 	if err != nil {
 		return err
 	}
-	defer conn.Close(context.WithoutCancel(ctx))
+	defer func() { // bounded even when ctx is done: a partitioned network must not hang the Job
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = conn.Close(closeCtx)
+	}()
 
 	unlock, err := migrate.Lock(ctx, conn)
 	if err != nil {

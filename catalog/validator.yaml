@@ -18,4 +18,5 @@ spec:
   system: rarebit
   dependsOn:
     - resource:postgres
-slos: [] # recorded with the monitoring stack; indicators: /v1/validate errors and latency
+# SLOs: none yet. They come with the monitoring stack; the indicators will be /v1/validate
+# errors and latency (validator_http_requests_total, validator_http_request_duration_seconds).

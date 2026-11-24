@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Config holds every setting. Field comments name the variable and its default.
@@ -36,6 +38,9 @@ func Load(getenv func(string) string) (Config, error) {
 	c.DatabaseURL = getenv("DATABASE_URL")
 	if c.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))
+	} else if _, err := pgx.ParseConfig(c.DatabaseURL); err != nil {
+		// pgx's error quotes the URL; this message can't leak the password.
+		errs = append(errs, errors.New("DATABASE_URL isn't a valid Postgres URL"))
 	}
 	c.DataDir = orDefault(getenv("VALIDATOR_DATA_DIR"), "/data")
 	c.MaxAnswerRunes = intIn(getenv, "VALIDATOR_MAX_ANSWER_RUNES", 64, 1, 256, &errs)

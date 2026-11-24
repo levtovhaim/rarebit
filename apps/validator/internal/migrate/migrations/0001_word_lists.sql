@@ -1,11 +1,17 @@
 -- Categories and their word lists. Only `validator migrate` writes these tables, from
 -- data/categories/*.json; the keys are computed by native/hebrew-normalize at load time.
--- Categories are upserted, never dropped and recreated, so later tables can reference them.
+--
+-- Categories are never deleted: when a category's file goes away, the load sets retired_at
+-- and empties its lists, so tables that reference categories keep their rows. Such tables
+-- should reference categories (id) without ON DELETE CASCADE.
+-- word_lists and words are rewritten on every load and their ids change: never point a
+-- foreign key at them; refer to a word by (category_id, word).
 
 CREATE TABLE categories (
-    id   text PRIMARY KEY CHECK (id ~ '^[a-z][a-z0-9_-]*$'),
-    name text NOT NULL,
-    kind text NOT NULL CHECK (kind IN ('regular', 'creative'))
+    id         text PRIMARY KEY CHECK (id ~ '^[a-z][a-z0-9_-]{0,63}$'),
+    name       text NOT NULL,
+    kind       text NOT NULL CHECK (kind IN ('regular', 'creative')),
+    retired_at timestamptz  -- set when the category's file was removed; NULL while it's live
 );
 
 CREATE TABLE word_lists (

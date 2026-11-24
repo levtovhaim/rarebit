@@ -6,6 +6,7 @@ package validate
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -54,6 +55,9 @@ var (
 // Letters are the 22 letters a round can use.
 const Letters = "אבגדהוזחטיכלמנסעפצקרשת"
 
+// CategoryID is the form of a category id, here, in the data files and in the schema's CHECK.
+var CategoryID = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+
 // Minimum key lengths, in letters, for a variant and a typo match (the library's thresholds).
 const (
 	minVariantLetters = 3
@@ -76,6 +80,9 @@ func New(store Store, maxRunes, fuzzyCandidates int) *Validator {
 func (v *Validator) Validate(ctx context.Context, category, letter, answer string) (Outcome, error) {
 	if utf8.RuneCountInString(letter) != 1 || !strings.Contains(Letters, letter) {
 		return Outcome{}, ErrBadLetter
+	}
+	if !CategoryID.MatchString(category) { // no query for ids that can't exist (a NUL fails in Postgres)
+		return Outcome{}, ErrUnknownCategory
 	}
 	ok, err := v.store.CategoryExists(ctx, category)
 	if err != nil {

@@ -8,7 +8,9 @@
 package hebrew
 
 /*
-#cgo LDFLAGS: -lhebrew_normalize -lstdc++ -lm
+#cgo LDFLAGS: -lhebrew_normalize
+#cgo linux LDFLAGS: -lstdc++ -lm
+#cgo darwin LDFLAGS: -lc++
 #include <stddef.h>
 #include <hebrew_normalize/hebrew_normalize.h>
 
