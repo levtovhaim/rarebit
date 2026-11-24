@@ -24,8 +24,16 @@ repos:
   - repo: local
     hooks:
       - id: gitleaks
-        name: gitleaks (secrets in staged changes)
-        entry: gitleaks git --pre-commit --staged --redact --no-banner
+        name: gitleaks (branch commits, uncommitted changes, new files)
+        # Scans everything this branch would add, staged or not: commits not yet on origin/main
+        # (all history if there's no origin/main), changes to tracked files, and new files that
+        # aren't ignored. Ignored files (a local .env) are skipped on purpose: they never reach git.
+        entry: >-
+          bash -c 'set -euo pipefail;
+          if base="$(git merge-base origin/main HEAD 2>/dev/null)"; then range="$base..HEAD"; else range=HEAD; fi;
+          gitleaks git --log-opts="$range" --redact --no-banner;
+          git diff HEAD | gitleaks stdin --redact --no-banner;
+          git ls-files -z --others --exclude-standard | xargs -0 -r -n1 gitleaks dir --redact --no-banner'
         language: system
         pass_filenames: false
         always_run: true
