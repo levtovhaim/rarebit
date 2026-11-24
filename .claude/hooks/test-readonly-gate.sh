@@ -77,6 +77,7 @@ check allow 'aws service-quotas list-requested-service-quota-change-history --se
 check allow 'aws budgets describe-budgets --account-id 123456789012'
 check allow 'aws ssm get-parameter --name /rarebit/dev/x'
 check allow 'aws s3 ls'
+check allow 'aws iam get-account-password-policy'
 check allow 'aws sts get-caller-identity' PowerShell
 check ask 'aws ec2 terminate-instances --instance-ids i-1'
 check ask 'AWS.EXE ec2 run-instances --image-id ami-1' PowerShell

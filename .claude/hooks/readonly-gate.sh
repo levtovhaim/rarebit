@@ -44,6 +44,11 @@ aws_read_only() {
     ce) return 1 ;;        # Cost Explorer bills $0.01 per request
     configure) return 1 ;; # prints and edits local credentials
   esac
+  case "$service $op" in
+    # Plain reads whose names the carve-outs below would catch. Add one only after checking
+    # that its output holds no secret, and add a test row.
+    "iam get-account-password-policy") return 0 ;; # the policy's rules, not a password
+  esac
   case "$op" in
     # Reads that print a secret or create credentials.
     get-*secret* | get-*password* | get-*token* | get-*credential* | get-*access-details*) return 1 ;;
