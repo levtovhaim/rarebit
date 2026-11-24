@@ -124,4 +124,4 @@
 | Infra, CI and cost changes | `auditor` (`.claude/agents/auditor.md`); address its CRITICAL and HIGH findings |
 
 ## Review
-Infra, CI, Argo CD and policy changes need CODEOWNERS approval.
+Infra, CI, Argo CD and policy paths have code owners (`.github/CODEOWNERS`), so GitHub requests their review on every PR that touches them. Approval is **not enforced yet**: the `main` ruleset requires a PR but no approvals, and a human merges every PR by hand. Required approval and code-owner review come with a separate GitHub identity for agents; until then, never merge your own PR unless a human tells you to.
