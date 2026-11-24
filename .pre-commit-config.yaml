@@ -66,6 +66,8 @@ repos:
         entry: hadolint
         language: system
         types: [dockerfile]
+        # A Dockerfile's own ignore file (<name>.dockerignore) is tagged as a Dockerfile too
+        exclude: \.dockerignore$
       - id: yamllint
         name: yamllint
         entry: yamllint

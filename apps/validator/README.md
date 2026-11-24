@@ -130,3 +130,31 @@ apps/validator/build/validator migrate
 apps/validator/build/validator serve
 curl -s -X POST localhost:8080/v1/validate -d '{"category":"country","letter":"י","answer":"ישראל"}'
 ```
+
+## Container image
+
+[`Dockerfile`](Dockerfile) builds in two stages ([ADR 0017](../../docs/adr/0017-validator-image-distroless-cc.md)):
+- **The builder** (`golang:1.27.4-trixie`) builds the library and the binary.
+- **The runtime image** (`gcr.io/distroless/cc-debian13:nonroot`) holds only:
+  - the binary, as `/validator`;
+  - the word lists, read-only, in `/data/categories`;
+  - glibc and libstdc++, which come with the base image.
+
+Both base images are pinned by digest. The build context is the repo root, limited by [`Dockerfile.dockerignore`](Dockerfile.dockerignore) to `native/`, `apps/validator/` and `data/categories/`.
+
+```bash
+make validator-image         # builds rarebit-validator:dev (VALIDATOR_IMAGE=... to rename it)
+make validator-image-smoke   # builds it, then runs test/image-smoke.sh against a throwaway Postgres
+```
+
+The smoke test runs the image as Kubernetes will: `--read-only`, every capability dropped, `no-new-privileges`. It checks:
+- the image: non-root (uid 65532), no shell, no world-writable files, at most 45 MB unpacked (41 MB today, about 16 MB compressed);
+- `version` prints the git SHA from the `GIT_SHA` build arg;
+- `migrate` loads the word lists from the image, and a rerun changes nothing;
+- `serve` gets ready and validates an answer;
+- SIGTERM drains and exits 0.
+
+Running it:
+- **Deployment:** the default command is `serve`.
+- **migrate Job:** the same image with `args: ["migrate"]`.
+- **Pod spec:** `runAsNonRoot: true` and `readOnlyRootFilesystem: true` both work; the process never writes to disk.

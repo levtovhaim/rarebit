@@ -1,0 +1,10 @@
+# Build context for apps/validator/Dockerfile (the context is the repo root). An allowlist:
+# everything is excluded except what the build needs, so local files (.env, build output,
+# editor and tool config) never reach the builder.
+*
+!native/CMakeLists.txt
+!native/cmake/
+!native/hebrew-normalize/
+!apps/validator/
+!data/categories/
+**/build/
