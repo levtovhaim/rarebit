@@ -25,6 +25,8 @@ Workflow: [`.github/workflows/spike-runner.yml`](../../.github/workflows/spike-r
 
 - actions by full commit SHA; Go 1.27.4; Redis source at the commit of tag 8.10.3; base image `busybox:1.37.0` by digest
 - the first run is **cold**; re-running the same workflow run gives the **warm** numbers
+- it runs **on demand only**: Actions → runner-spike → Run workflow, or `gh workflow run spike-runner.yml`. It doesn't run on pull requests, because a fork PR in a public repository could otherwise run its own code on the vendor's runners.
+- the results below were measured with `actions/setup-go` v7.0.0; the workflow now pins v7.1.0. A re-run records which version it used.
 
 ## What is measured
 

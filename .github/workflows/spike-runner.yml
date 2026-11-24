@@ -5,11 +5,10 @@
 # Results and interpretation: docs/benchmarks/ci-runners.md
 name: runner-spike
 
+# On demand only. It no longer runs on pull requests: in a public repository a fork PR can edit
+# any workflow, so a pull_request trigger would let outside code run on the vendor's runners.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/spike-runner.yml
 
 permissions:
   contents: read
