@@ -16,3 +16,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0010](0010-c-api-at-the-cgo-boundary.md) | Expose native libraries to Go through a C API on a static archive | accepted |
 | [0011](0011-googletest-through-fetchcontent.md) | Test C++ with GoogleTest, fetched by CMake and pinned by hash | accepted |
 | [0012](0012-word-lists-as-json-per-category.md) | Keep word lists as one JSON file per category, each list with its own source and license | accepted |
+| [0013](0013-validator-http-json-api.md) | Serve validation as an HTTP/JSON API that looks up Postgres on every request | accepted |
+| [0014](0014-migrations-and-content-load-in-the-validator.md) | Run schema migrations and the word-list load from the validator binary | accepted |

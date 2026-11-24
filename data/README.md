@@ -1,6 +1,6 @@
 # data
 
-Game content as files in git: the categories and their word lists. Content changes only by pull request. A loader job will write these files into Postgres; it isn't built yet, and it will be the only writer of content into the database.
+Game content as files in git: the categories and their word lists. Content changes only by pull request. [`validator migrate`](../apps/validator/README.md#validator-migrate) loads these files into Postgres, and it's the only writer of content into the database.
 
 ## Layout
 
