@@ -1,6 +1,6 @@
 # CI runner evaluation
 
-Compares GitHub-hosted runners with Incredibuild runners for the job classes this repo will run. This first round is a **spike**: it records what each fleet offers and how it behaves on small, reproducible workloads, before any real CI exists. Later rounds (`runner-edge.yml`, Phase 2; burst, cache and compile benchmarks, Phase 8) use the real build.
+Compares GitHub-hosted runners with Incredibuild runners for the job classes this repo will run. This first round is a **spike**: it records what each fleet offers and how it behaves on small, reproducible workloads, before any real CI exists. Later rounds use the real build: `runner-edge.yml`, built together with the runner policy (`ci/runner-policy.yaml`), and after it burst, cache and compile benchmarks.
 
 ## Setup
 
@@ -41,7 +41,7 @@ Workflow: [`.github/workflows/spike-runner.yml`](../../.github/workflows/spike-r
 
 ## Results
 
-**Run conditions:** 2026-11-23, workflow run 45210393224 on commit `6ca8f47`: attempt 1 (cold) and attempt 2 (warm, the same commit re-run). That's one run per condition, so the numbers are indicative, not statistically solid.
+**Run conditions:** 2026-11-23, workflow run [45210393224](https://github.com/levtovhaim/rarebit/actions/runs/45210393224) on the [PR #1](https://github.com/levtovhaim/rarebit/pull/1) branch (squash-merged, so that commit isn't on `main`): attempt 1 (cold) and attempt 2 (warm, the same commit re-run). That's one run per condition, so the numbers are indicative, not statistically solid.
 
 ### Runners
 
@@ -92,13 +92,13 @@ Egress, from the cold run:
 1. **CPU-bound work runs about 1.9× faster on Incredibuild in this sample**, in line with its 8 vCPUs vs 4. The speedup comes from a bigger machine; nothing was cached between runs. Incredibuild was steady across runs (7.7 / 8.0 s; 51.3 / 46.4 s), while GitHub-hosted varied a lot (14.7 / 37.4 s for the same build). Compare medians of several runs, never single GitHub runs.
 2. **Every Incredibuild job pays a start-up of about 2.5–3.5 minutes** (8.6 minutes seen once on Arm), even on a re-run. Each job gets a fresh machine. GitHub-hosted jobs start in seconds.
 3. **Break-even is long jobs.** At about 1.9× speed and about 3 minutes of start-up, a job needs roughly 6–7 minutes of CPU-bound work on a 4-vCPU GitHub-hosted runner before Incredibuild finishes first. Shorter jobs finish sooner on GitHub-hosted.
-4. **The built-in caching showed no measurable effect on these workloads.** Docker layers were not reused across runs, the Redis build changed within run-to-run noise, and the Go build was unchanged without `actions/cache`. `actions/cache` worked the same on both fleets. Larger, dependency-heavy builds may behave differently, so Phase 2 measures real workloads.
+4. **The built-in caching showed no measurable effect on these workloads.** Docker layers were not reused across runs, the Redis build changed within run-to-run noise, and the Go build was unchanged without `actions/cache`. `actions/cache` worked the same on both fleets. Larger, dependency-heavy builds may behave differently, so the next round measures real workloads.
 5. **The Windows runner has half the RAM** of the GitHub-hosted one (8 vs 16 GB). Memory-hungry builds (MSVC with many parallel jobs) need checking before routing them there.
 6. **Network:** lower download throughput and higher latency to github.com on Incredibuild.
 
-**Input for the runner policy (proposal, decided in Phase 2):**
+**Input for the runner policy (a proposal; [ADR 0005](../adr/0005-ci-runner-fleets-by-job-class.md) is decided when the policy is built):**
 - long C/C++ and other heavy compiles (`heavy-build`) → Incredibuild
 - `light`, `tf-plan` and short `e2e` jobs → GitHub-hosted
 - `docker` → decided after measuring real images
 
-**Limits of this round:** one run per condition; noisy GitHub-hosted performance; a tiny Docker workload; no dependency-heavy cache test yet. Phase 2's `runner-edge.yml` repeats this with at least 5 runs per runner (medians) and real workloads.
+**Limits of this round:** one run per condition; noisy GitHub-hosted performance; a tiny Docker workload; no dependency-heavy cache test yet. The next round, `runner-edge.yml`, repeats this with at least 5 runs per runner (medians) and real workloads.

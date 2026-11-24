@@ -33,14 +33,14 @@
   - External Secrets (SSM Parameter Store)
   - kube-prometheus-stack, Kyverno, KEDA
 - CI: GitHub Actions. Each job's runner comes from `ci/runner-policy.yaml`: heavy job classes run on Incredibuild runners, light ones on GitHub-hosted runners. Repo variables:
-  - `RUNNER_FLEET` (`policy`, `github` or `incredibuild`) forces one fleet, e.g. as a fallback (runbook: `docs/runbooks/ci-runner-fallback.md`)
+  - `RUNNER_FLEET` (`policy`, `github` or `incredibuild`) forces one fleet, e.g. as a fallback (runbook `docs/runbooks/ci-runner-fallback.md`, written together with `ci/runner-policy.yaml`)
   - `RUNNER_LABEL`, when set, overrides the runner label for Linux jobs
 - Test arena: every PR labeled `preview` gets its preview played by AI personas and scripted bots, tested in browsers on three OSes, and hit with pod kills during play. One PR comment reports the results; a failed game blocks the merge. A scheduled exploratory QA agent also tests previews and opens issues (it can't push).
 - LLM use (arena personas, content agents, exploratory QA) has a per-run token cap, a monthly cap and a kill switch (repo variable `LLM_ENABLED`).
 
 ## Commands
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
-- `make check`: lint and unit tests for what changed. Run it before every commit.
+- `make check`: lint and tests. Today it lints every file and runs the permission-gate tests; it narrows to what changed once there's enough to test. Run it before every commit.
 - `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset.
 - `make up` / `make smoke` / `make down`: local stack with docker compose; `smoke` = bots play a full game.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git.
