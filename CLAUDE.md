@@ -92,7 +92,8 @@
 - Promotion: a promotion PR changes only `image-tags.yaml` files under `deploy/envs/`. They are the one path under `deploy/` without a code owner (`.github/CODEOWNERS`), so promotions merge without a human; anything else in `deploy/` requests review.
 - Kubernetes labels: `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner`, `tier`.
 - Terraform: each module has a `README.md` (terraform-docs), `examples/basic` (works with plain `terraform`) and `versions.tf`. Live config lives only in `infra/live`.
-- Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses CTest; game e2e runs through `apps/bots`, browser e2e through Playwright.
+- Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses GoogleTest through CTest; game e2e runs through `apps/bots`, browser e2e through Playwright.
+- C++ (`native/`): C++20, warnings as errors, built with the CMake preset for the OS (`make native`). Each library exposes a C API, so cgo links it without C++ name mangling (ADR 0009).
 - Line endings: LF everywhere (`.gitattributes`).
 
 ## Worktrees and parallel work

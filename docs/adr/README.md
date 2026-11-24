@@ -11,3 +11,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0005](0005-ci-runner-fleets-by-job-class.md) | Route CI jobs to a runner fleet by job class | proposed |
 | [0006](0006-agent-permission-gate.md) | Gate aws and gh api calls with an allowlist hook, not ask rules | accepted |
 | [0007](0007-infra-changes-by-human-approval.md) | Infra-changing commands run with a human's approval of the exact command | accepted |
+| [0008](0008-hebrew-normalization-without-icu.md) | Normalize Hebrew with generated Unicode tables, not ICU | accepted |
+| [0009](0009-cpp-toolchain-presets-googletest.md) | C++20 with CMake presets, a C API at the boundary, and GoogleTest pinned by hash | accepted |
