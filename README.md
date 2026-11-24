@@ -6,7 +6,7 @@ Each round shows a Hebrew letter and a category, and every player has 20 seconds
 
 ## Status
 
-Early setup: no game or platform runs yet. In place so far: the contributor rules, shared tooling for agents and reviewers, the CI runner evaluation ([results](docs/benchmarks/ci-runners.md)), permission guardrails for agent sessions (ADRs [0006](docs/adr/0006-agent-permission-gate.md) and [0007](docs/adr/0007-infra-changes-by-human-approval.md)), and the C++ Hebrew normalization library ([native/hebrew-normalize](native/hebrew-normalize/README.md), `make native`), and seed word lists for the six regular categories ([data/](data/README.md)). What exists and what's planned: [docs/architecture.md](docs/architecture.md). The game services, the CI golden path, the Kubernetes platform and the infrastructure arrive in small pull requests.
+Early setup: no game or platform runs yet. In place so far: the contributor rules, shared tooling for agents and reviewers, the CI runner evaluation ([results](docs/benchmarks/ci-runners.md)), permission guardrails for agent sessions (ADRs [0006](docs/adr/0006-agent-permission-gate.md) and [0007](docs/adr/0007-infra-changes-by-human-approval.md)), the C++ Hebrew normalization library ([native/hebrew-normalize](native/hebrew-normalize/README.md), `make native`), and seed word lists for the six regular categories ([data/](data/README.md)). What exists and what's planned: [docs/architecture.md](docs/architecture.md). The game services, the CI golden path, the Kubernetes platform and the infrastructure arrive in small pull requests.
 
 ## What it will include
 

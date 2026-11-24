@@ -40,7 +40,7 @@
 
 ## Commands
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
-- `make check`: lint and tests. Today it lints every file and runs the permission-gate tests; it narrows to what changed once there's enough to test. Run it before every commit.
+- `make check`: lint and tests. Today it lints every file and runs the permission-gate tests and the word-list check (`data/tools/check_data.py`); it narrows to what changed once there's enough to test. Run it before every commit.
 - `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes.
 - `make up` / `make smoke` / `make down`: local stack with docker compose; `smoke` = bots play a full game.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git.

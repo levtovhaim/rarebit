@@ -1,4 +1,4 @@
-"""Shared rules for words in data/categories/*.json (used by check_data.py and wikidata_seed.py)."""
+"""Shared rules for words in data/categories/*.json (used by check_data.py and any import script)."""
 
 from __future__ import annotations
 

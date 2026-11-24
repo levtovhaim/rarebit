@@ -19,7 +19,7 @@ Answers are validated against word lists per category. The lists:
   - a list of word lists, each with its `source`, an SPDX `license`, optional `url`, `query` and `retrieved` fields, and its `words`.
 - Words are stored clean (Hebrew letters, spaces, hyphens, geresh/gershayim; no niqqud), sorted, one per line in the JSON array, and unique within a category.
 - `data/tools/check_data.py` enforces the format and the license allowlist (`CC0-1.0`, `MIT`). It runs as the `word-lists` pre-commit hook, and `--coverage` reports words per starting letter.
-- Open data comes from Wikidata (CC0) through a committed, rate-limited script that replaces only the Wikidata list.
+- The first lists are written by contributors (MIT). An open-data source (Wikidata, CC0) is added later as its own list in each file, by a committed script that regenerates that list and drops its words from the other lists.
 
 ## Alternatives considered
 

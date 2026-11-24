@@ -1,6 +1,6 @@
 # data
 
-Game content as files in git: the categories and their word lists. Content changes only by pull request. The validator's `migrate` job loads these files into Postgres; later a loader Job does that on every merge.
+Game content as files in git: the categories and their word lists. Content changes only by pull request. A loader job will write these files into Postgres; it isn't built yet, and it will be the only writer of content into the database.
 
 ## Layout
 
@@ -12,40 +12,43 @@ One file per category in `categories/`, named by its id:
   "name": "חי",
   "kind": "regular",
   "lists": [
-    {
-      "source": "Wikidata",
-      "license": "CC0-1.0",
-      "url": "https://www.wikidata.org/",
-      "query": "data/tools/wikidata_seed.py (animal)",
-      "retrieved": "2026-11-24",
-      "words": ["אריה", "..."]
-    },
-    { "source": "Rarebit contributors", "license": "MIT", "words": ["..."] }
+    { "source": "Rarebit contributors", "license": "MIT", "words": ["אריה", "..."] }
   ]
 }
 ```
 
 - `kind` is `regular` (ארץ, עיר, חי, צומח, שם, מקצוע) or `creative`.
-- **Each list carries its own source and license**, so every word's provenance is clear. Allowed licenses: `CC0-1.0` and `MIT`. Adding another is a decision for review.
+- **Each list carries its own `source` and `license`**, so every word's provenance is clear.
+  - A list from open data adds `url`, `query` (how it was produced) and `retrieved` (a date).
+  - Allowed licenses: `CC0-1.0` and `MIT`. Adding another is a decision for review.
 - Words are stored clean:
   - Hebrew letters, single spaces, hyphens, and geresh/gershayim (`' " ׳ ״`);
   - no niqqud;
   - 2–30 letters.
-  Variants such as niqqud, final letters, and full vs defective spelling are handled at match time by [hebrew-normalize](../native/hebrew-normalize/README.md), so they don't need to be listed.
 - Each list is sorted, and a word appears once per category, across all its lists.
+
+### Which spellings to list
+
+[hebrew-normalize](../native/hebrew-normalize/README.md) matches answers, so some variants never need listing:
+- niqqud, final letters, spaces and punctuation;
+- full vs defective spelling that only adds or drops vav and yod (שולחן / שלחן, שווייץ / שוויץ);
+- a one-letter typo in words of 4+ letters.
+
+Spellings that differ in other letters do need their own entry, e.g. שבדיה / שוודיה (ב vs וו).
+
+Different words can share a spelling key, e.g. שירה / שרה, תומר / תמר, אורז / ארז. Keep both. The validator checks exact matches first, and within one category both are valid answers anyway.
 
 ## Sources
 
 | Source | License | How it gets here |
 |---|---|---|
-| [Wikidata](https://www.wikidata.org/) | CC0-1.0 | `python data/tools/wikidata_seed.py [category]` runs one SPARQL query per category, keeps the usable Hebrew labels, and replaces that file's Wikidata list. It queries at most once a minute and backs off when the service asks. Set `WIKIDATA_USER_AGENT` to identify your client. |
-| Rarebit contributors | MIT (this repository) | Written by hand, mostly common words and spellings that Wikidata labels miss |
+| Rarebit contributors | MIT (this repository) | Written by hand: common everyday words and spellings |
 
-**Today the seed is the contributors' lists only.** The first Wikidata fetch (2026-11-24) was refused: the query service was rate-limiting every client during an outage (HTTP 429). Run the script once the service answers again; it adds a Wikidata list to each file and removes the words it now provides from the contributors' list.
+Open data (Wikidata, CC0) is planned as a second source, through a script that adds a separate list per category.
 
 ## Change the content
 
-1. Edit the right list, or run the Wikidata script.
+1. Edit the right list.
 2. Run `python data/tools/check_data.py --fix`, which sorts the lists and drops duplicates (the first list wins), then `make check`. The `word-lists` hook runs the same check.
 3. Open a PR. The word counts per starting letter are worth a look in review:
 
@@ -53,4 +56,4 @@ One file per category in `categories/`, named by its id:
 python data/tools/check_data.py --coverage
 ```
 
-A letter with fewer than 3 words in a category is skipped by the game for that category. Some gaps are real: few country names start with ז, ח, כ or ע.
+The game will skip a letter that has fewer than 3 words in a category. Some gaps are real: few country names start with ז, ח, כ or ע.
