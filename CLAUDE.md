@@ -41,7 +41,7 @@
 ## Commands
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
 - `make check`: lint and tests. Today it lints every file and runs the permission-gate tests; it narrows to what changed once there's enough to test. Run it before every commit.
-- `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset.
+- `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes.
 - `make up` / `make smoke` / `make down`: local stack with docker compose; `smoke` = bots play a full game.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git.
 - `plat doctor`: verify tools, versions, AWS identity and kube context.
@@ -92,7 +92,8 @@
 - Promotion: a promotion PR changes only `image-tags.yaml` files under `deploy/envs/`. They are the one path under `deploy/` without a code owner (`.github/CODEOWNERS`), so promotions merge without a human; anything else in `deploy/` requests review.
 - Kubernetes labels: `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner`, `tier`.
 - Terraform: each module has a `README.md` (terraform-docs), `examples/basic` (works with plain `terraform`) and `versions.tf`. Live config lives only in `infra/live`.
-- Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses CTest; game e2e runs through `apps/bots`, browser e2e through Playwright.
+- Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses GoogleTest through CTest; game e2e runs through `apps/bots`, browser e2e through Playwright.
+- C++ (`native/`): C++20, warnings as errors, built with the CMake preset for the OS (`make native`). Each library is a static archive with a C API, so cgo links it without C++ name mangling (ADRs 0009–0011).
 - Line endings: LF everywhere (`.gitattributes`).
 
 ## Worktrees and parallel work

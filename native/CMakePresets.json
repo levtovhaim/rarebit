@@ -1,0 +1,121 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "RAREBIT_BUILD_TESTS": "ON",
+        "RAREBIT_WERROR": "ON"
+      }
+    },
+    {
+      "name": "linux-gcc",
+      "displayName": "Linux, GCC, Ninja",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-gcc-asan",
+      "displayName": "Linux, GCC, Ninja, AddressSanitizer + UndefinedBehaviorSanitizer",
+      "inherits": "linux-gcc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "RAREBIT_SANITIZE": "ON"
+      }
+    },
+    {
+      "name": "macos-clang",
+      "displayName": "macOS, Clang, Ninja",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows, MSVC (Visual Studio 2022)",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-gcc",
+      "configurePreset": "linux-gcc"
+    },
+    {
+      "name": "linux-gcc-asan",
+      "configurePreset": "linux-gcc-asan"
+    },
+    {
+      "name": "macos-clang",
+      "configurePreset": "macos-clang"
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "configuration": "RelWithDebInfo"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "base-test",
+      "hidden": true,
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "linux-gcc",
+      "inherits": "base-test",
+      "configurePreset": "linux-gcc"
+    },
+    {
+      "name": "linux-gcc-asan",
+      "inherits": "base-test",
+      "configurePreset": "linux-gcc-asan"
+    },
+    {
+      "name": "macos-clang",
+      "inherits": "base-test",
+      "configurePreset": "macos-clang"
+    },
+    {
+      "name": "windows-msvc",
+      "inherits": "base-test",
+      "configurePreset": "windows-msvc",
+      "configuration": "RelWithDebInfo"
+    }
+  ]
+}
