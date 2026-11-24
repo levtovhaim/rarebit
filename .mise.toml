@@ -36,6 +36,12 @@ go = "1.27.4"
 python = "3.14.10"
 uv = "0.13.8"
 
+# Native builds (native/, CMake presets). Checked 2026-11-24: cmake 4.5.1 (2026-11-19) is held
+# by the 7-day rule, revisit 2026-11-26. The compiler comes from the OS: gcc on Linux, MSVC on
+# Windows, clang on macOS.
+cmake = "4.5.0"
+ninja = "1.13.2"
+
 # Linters and scanners
 trivy = "0.76.2"
 actionlint = "1.7.12"
