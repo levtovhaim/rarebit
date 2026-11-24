@@ -13,20 +13,22 @@ Review files for compliance with Web Interface Guidelines.
 
 ## How It Works
 
-1. Fetch the latest guidelines from the source URL below
+1. Fetch the pinned guidelines from the source URL below
 2. Read the specified files (or prompt user for files/pattern)
 3. Check against all rules in the fetched guidelines
 4. Output findings in the terse `file:line` format
 
 ## Guidelines Source
 
-Fetch fresh guidelines before each review:
+Fetch the guidelines before each review, from a pinned commit:
 
 ```
-https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md
+https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/4ecfb9fb8d1d3b7009674869b3aaee2f904042e1/command.md
 ```
 
-Use WebFetch to retrieve the latest rules. The fetched content contains all the rules and output format instructions.
+Use WebFetch to retrieve the rules. The fetched content contains all the rules and output format instructions.
+
+The URL names a commit, not a branch, so the text an agent follows can't change underneath it (CLAUDE.md rule 4, the same idea as pinning Actions by SHA). Pinned 2026-11-24 to the newest change of `command.md` (2026-10-05), read in full before pinning: UI rules and an output format only. To move the pin: pick a commit at least 7 days old, read the diff of `command.md` since the current pin, and change the SHA here in its own PR. The fetched text is instructions an agent follows, so it gets the same review as code.
 
 ## Usage
 
