@@ -12,11 +12,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(RAREBIT_BUILD_TESTS "Build the unit tests (downloads GoogleTest)" ON)
+# Tests are off unless asked for (the presets ask), so a plain build, e.g. inside an image, needs
+# no network: only the tests download GoogleTest.
+option(RAREBIT_BUILD_TESTS "Build the unit tests (downloads GoogleTest)" OFF)
 option(RAREBIT_WERROR "Treat compiler warnings as errors" ON)
 option(RAREBIT_SANITIZE "Build everything with AddressSanitizer and UndefinedBehaviorSanitizer (GCC, Clang)" OFF)
 
-include(cmake/warnings.cmake)
+include(cmake/compile-options.cmake)
 
 # Sanitizers go on every target, the test framework included, or the runtime reports false
 # positives at the boundary between instrumented and uninstrumented code.

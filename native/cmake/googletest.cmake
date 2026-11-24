@@ -1,4 +1,4 @@
-# GoogleTest for the native unit tests (ADR 0009).
+# GoogleTest for the native unit tests.
 # Pinned to an uploaded release asset by URL and SHA-256 (CLAUDE.md rule 4). GitHub's generated
 # source archives aren't used: their bytes, and so their hashes, can change.
 # To bump: follow .claude/skills/dependency-versioning, then change the URL and the hash together.

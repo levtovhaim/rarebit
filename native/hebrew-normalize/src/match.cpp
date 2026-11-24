@@ -57,23 +57,32 @@ std::size_t edit_distance(std::string_view a_utf8, std::string_view b_utf8) {
   return detail::edit_distance_cp(detail::decode_utf8(a_utf8), detail::decode_utf8(b_utf8));
 }
 
-MatchKind match(std::string_view answer, std::string_view entry) {
-  const std::u32string a = detail::normalize_cp(answer);
-  const std::u32string e = detail::normalize_cp(entry);
+namespace detail {
+
+MatchKind match_cp(std::u32string_view a, std::u32string_view e) {
   if (a.empty() || e.empty()) {
     return MatchKind::none;
   }
   if (a == e) {
     return MatchKind::exact;
   }
-  if (a.size() >= detail::kMinVariantLength && e.size() >= detail::kMinVariantLength &&
-      detail::spelling_key_cp(a) == detail::spelling_key_cp(e)) {
+  if (a.size() >= kMinVariantLength && e.size() >= kMinVariantLength && spelling_key_cp(a) == spelling_key_cp(e)) {
     return MatchKind::variant;
   }
-  if (a.size() >= detail::kMinFuzzyLength && e.size() >= detail::kMinFuzzyLength && detail::within_one_edit(a, e)) {
+  if (a.size() >= kMinFuzzyLength && e.size() >= kMinFuzzyLength && within_one_edit(a, e)) {
     return MatchKind::fuzzy;
   }
   return MatchKind::none;
+}
+
+}  // namespace detail
+
+MatchKind match(std::string_view answer, std::string_view entry) {
+  return detail::match_cp(detail::normalize_cp(answer), detail::normalize_cp(entry));
+}
+
+MatchKind match_keys(std::string_view answer_key, std::string_view entry_key) {
+  return detail::match_cp(detail::decode_utf8(answer_key), detail::decode_utf8(entry_key));
 }
 
 }  // namespace hebrew_normalize

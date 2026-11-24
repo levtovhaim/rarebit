@@ -16,7 +16,7 @@ target_compile_features(hebrew_normalize PUBLIC cxx_std_20)
 target_compile_definitions(hebrew_normalize PRIVATE HN_VERSION="${PROJECT_VERSION}")
 # Position-independent code, so the archive can be linked into a Go (cgo) binary built as PIE.
 set_target_properties(hebrew_normalize PROPERTIES POSITION_INDEPENDENT_CODE ON)
-rarebit_set_warnings(hebrew_normalize)
+rarebit_compile_options(hebrew_normalize)
 
 # `cmake --install` puts the archive and the headers in a prefix, e.g. for an image build.
 include(GNUInstallDirs)

@@ -27,6 +27,33 @@ struct LatinFold {
 // each sorted by code point.
 #include "unicode_tables.inc"
 
+// The lookups binary-search the tables and read `length` entries of `sequence`, so a hand-edited
+// or broken .inc file must fail the build, not read out of bounds.
+template <class Table>
+constexpr bool strictly_sorted(const Table& table) {
+  for (std::size_t i = 1; i < std::size(table); ++i) {
+    if (!(table[i - 1].code_point < table[i].code_point)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <class Table>
+constexpr bool lengths_fit(const Table& table) {
+  for (const Decomposition& d : table) {
+    if (d.length == 0 || d.length > std::size(d.sequence)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(strictly_sorted(kCanonical) && lengths_fit(kCanonical), "kCanonical is malformed");
+static_assert(strictly_sorted(kCompatibility) && lengths_fit(kCompatibility), "kCompatibility is malformed");
+static_assert(strictly_sorted(kCombiningClasses), "kCombiningClasses is not sorted");
+static_assert(strictly_sorted(kLatinFolds), "kLatinFolds is not sorted");
+
 template <class Table>
 const auto* lookup(const Table& table, char32_t cp) noexcept {
   const auto* first = std::begin(table);
