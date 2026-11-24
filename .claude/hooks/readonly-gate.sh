@@ -16,6 +16,9 @@
 # Portable to bash 3.2 (macOS): no ${x,,}, no empty arrays under set -u.
 set -eo pipefail
 
+# The AWS CLI profile this repository's account is reached through (CLAUDE.md, .mise.toml).
+project_profile=rarebit
+
 decide() { # decide <allow|ask> <reason>
   jq -cn --arg d "$1" --arg r "$2" \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: $d, permissionDecisionReason: $r}}' |
@@ -28,15 +31,35 @@ decide() { # decide <allow|ask> <reason>
 #   $1 = service (e.g. ec2)   $2 = operation (e.g. describe-instances)
 #   $3... = the arguments after the operation (global options can appear here too)
 # Everything arrives lowercased, with '...' literals emptied to ''.
-# Return 0 to run without a prompt, 1 to ask.
+# Return 0 to run without a prompt, 1 to ask. Reads run without a prompt, except the ones
+# that print secrets or create credentials, cost money, or write local files.
 aws_read_only() {
-  # No aws reads are listed yet: every aws call asks.
+  local service="$1" op="$2" a
+  shift 2
+  # Decrypting a parameter prints its secret, whatever the operation is called.
+  for a in "$@"; do
+    case "$a" in --with-decryption | --with-decryption=*) return 1 ;; esac
+  done
+  case "$service" in
+    ce) return 1 ;;        # Cost Explorer bills $0.01 per request
+    configure) return 1 ;; # prints and edits local credentials
+  esac
+  case "$op" in
+    # Reads that print a secret or create credentials.
+    get-*secret* | get-*password* | get-*token* | get-*credential* | get-*access-details*) return 1 ;;
+    # Reads that write a local file.
+    get-object | get-object-torrent) return 1 ;;
+  esac
+  case "$op" in
+    describe-* | list-* | get-*) return 0 ;;
+  esac
+  [[ "$service $op" == "s3 ls" ]] && return 0
   return 1
 }
 # ---------------------------------------------------------------------------------------
 
 check_aws() { # arguments after `aws`
-  local service="" op="" t
+  local service="" op="" t profile=""
   local -a rest=()
   if [[ $# -eq 1 && "$1" == --version ]]; then decide allow "aws --version"; fi
   while (($#)); do
@@ -46,6 +69,8 @@ check_aws() { # arguments after `aws`
       --endpoint-url | --endpoint-url=* | --ca-bundle | --ca-bundle=* | --no-verify-ssl)
         decide ask "aws: $t changes where or how requests are sent"
         ;;
+      --profile) profile="${1:-}" ;; # may come before or after the operation
+      --profile=*) profile="${t#--profile=}" ;;
     esac
     if [[ -n "$op" ]]; then
       rest+=("$t")
@@ -66,6 +91,10 @@ check_aws() { # arguments after `aws`
     if [[ -z "$service" ]]; then service="$t"; else op="$t"; fi
   done
   [[ -n "$op" ]] || decide ask "aws: no service and operation found"
+  # A read against the wrong account is still a mistake: only the project profile auto-runs.
+  profile="${profile:-$(tr '[:upper:]' '[:lower:]' <<<"${AWS_PROFILE:-${AWS_DEFAULT_PROFILE:-default}}")}"
+  [[ "$profile" == "$project_profile" ]] ||
+    decide ask "aws: profile '$profile' is not the project profile '$project_profile'"
   if aws_read_only "$service" "$op" ${rest[@]+"${rest[@]}"}; then
     decide allow "read-only aws call: $service $op"
   fi

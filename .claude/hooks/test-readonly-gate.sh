@@ -8,11 +8,13 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 gate="$here/readonly-gate.sh"
 pass=0
 fail=0
+# The AWS_PROFILE the gate sees; set per section. Empty means unset (the CLI's default profile).
+profile=rarebit
 
 check() { # check <allow|ask|none> <command> [tool]
   local want="$1" cmd="$2" tool="${3:-Bash}" out got rc
   out="$(jq -cn --arg c "$cmd" --arg t "$tool" '{tool_name: $t, tool_input: {command: $c}}' |
-    tr -d '\r' | bash "$gate")"
+    tr -d '\r' | AWS_PROFILE="$profile" AWS_DEFAULT_PROFILE='' bash "$gate")"
   rc=$?
   if ((rc != 0)); then
     got="exit $rc"
@@ -65,10 +67,52 @@ check ask 'aws --endpoint-url http://localhost:4566 s3 ls'
 check ask 'aws ec2 describe-regions --endpoint-url=http://localhost:4566'
 check ask 'aws ec2 describe-regions --no-verify-ssl'
 
-# --- aws: plain calls go to aws_read_only (policy rows belong with the policy) -------
+# --- aws read-only policy (aws_read_only) -------------------------------------------
 check allow 'aws --version'
+check allow 'aws sts get-caller-identity'
+check allow 'aws --profile rarebit --region eu-central-1 sts get-caller-identity --query Account --output text'
+check allow 'aws sts get-caller-identity | jq -r .Account'
+check allow "aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --output text"
+check allow 'aws service-quotas list-requested-service-quota-change-history --service-code ec2'
+check allow 'aws budgets describe-budgets --account-id 123456789012'
+check allow 'aws ssm get-parameter --name /rarebit/dev/x'
+check allow 'aws s3 ls'
+check allow 'aws sts get-caller-identity' PowerShell
 check ask 'aws ec2 terminate-instances --instance-ids i-1'
 check ask 'AWS.EXE ec2 run-instances --image-id ami-1' PowerShell
+check ask 'aws eks update-kubeconfig --name rarebit'
+check ask 'aws sts assume-role --role-arn arn:aws:iam::1:role/x --role-session-name y'
+check ask 'aws kms decrypt --ciphertext-blob fileb://blob'
+check ask 'aws s3 cp s3://bucket/key .'
+check ask 'aws s3api get-object --bucket b --key k out.bin'
+check ask 'aws secretsmanager get-secret-value --secret-id x'
+check ask 'aws secretsmanager get-random-password'
+check ask 'aws ssm get-parameter --name x --with-decryption'
+check ask 'aws ssm get-parameters-by-path --path /x --with-decryption'
+check ask 'aws ecr get-login-password --region eu-central-1'
+check ask 'aws ecr get-authorization-token'
+check ask 'aws sts get-session-token'
+check ask 'aws ec2 get-password-data --instance-id i-1'
+check ask 'aws eks get-token --cluster-name rarebit'
+check ask 'aws sso get-role-credentials --role-name r --account-id 1 --access-token t'
+check ask 'aws lightsail get-instance-access-details --instance-name x'
+check ask 'aws configure get aws_secret_access_key'
+check ask 'aws configure export-credentials'
+check ask 'aws configure list'
+check ask 'aws ce get-cost-and-usage --granularity DAILY --metrics UnblendedCost'
+check ask 'aws ec2 wait instance-running'
+
+# --- aws profile pin: a read against another profile asks ---------------------------
+check ask 'aws --profile other sts get-caller-identity'
+check ask 'aws sts get-caller-identity --profile other'
+check ask 'aws --profile=other s3 ls'
+profile=''
+check ask 'aws sts get-caller-identity'
+check allow 'aws --profile rarebit sts get-caller-identity'
+check allow 'aws sts get-caller-identity --profile=rarebit'
+profile=other
+check ask 'aws ec2 describe-regions'
+profile=rarebit
 
 # --- gh api -------------------------------------------------------------------------
 check allow 'gh api repos/levtovhaim/rarebit'

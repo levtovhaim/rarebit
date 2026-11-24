@@ -16,7 +16,8 @@ Two more gaps showed up while checking the rules against the documentation:
 ## Decision
 
 - A PreToolUse hook, `.claude/hooks/readonly-gate.sh`, decides `aws` and `gh api` calls. One plain read-only call (optionally piped into a text filter) is allowed. Any other command that runs `aws` or `gh api`, including any command the hook can't parse, asks. Commands that don't mention them get no decision from the hook.
-- `aws` reads are defined by an explicit read-only policy in the hook. `gh api` reads are calls without flags that set the method, headers or body.
+- An `aws` read is `describe-*`, `list-*`, `get-*` or `s3 ls`, except calls that print secrets or create credentials (`get-*secret*`, `*password*`, `*token*`, `*credential*`, `*access-details*`, any `--with-decryption`), Cost Explorer (billed per request), `configure`, and downloads to local files. A read runs without a prompt only when it targets the project profile (`--profile rarebit` or `AWS_PROFILE`); the project settings set `AWS_PROFILE` and `AWS_REGION`, so sessions don't fall back to a machine's default profile.
+- A `gh api` read is a call without flags that set the method, headers or body.
 - The broad `Bash(aws *)` and `Bash(gh api *)` ask rules are removed. A short list of `aws` write verbs (`create-`, `delete-`, `modify-`, `put-`, `run-`, `terminate-`, `update-`) stays as ask rules, so they still prompt if hooks are disabled.
 - Every ask and deny rule exists for both `Bash(...)` and `PowerShell(...)`, written as `tool *verb*` so flags before the verb still match.
 - The hook runs with `onFailure: block`: if it can't run (no bash or jq), the `aws` or `gh` call is blocked, not allowed.
@@ -27,6 +28,7 @@ Two more gaps showed up while checking the rules against the documentation:
 |---|---|
 | Keep `Bash(aws *)` as an ask rule | Every read prompts; agents and humans click through prompts until they stop reading them. |
 | Replace it with ask rules for every `aws` write verb | About 70 verb prefixes for each shell, and it fails open: a write verb missing from the list runs without a prompt. |
+| Allow only the exact `aws` operations we already use | Safest, but every new read prompts until someone adds it. The read prefixes plus carve-outs cover far more with a short list; a new secret-printing `get-*` operation is the residual risk, and IAM still bounds it. |
 | `bypassPermissions` mode | Removes the human check on infrastructure-changing commands that CLAUDE.md rule 2 relies on. |
 
 ## Consequences
