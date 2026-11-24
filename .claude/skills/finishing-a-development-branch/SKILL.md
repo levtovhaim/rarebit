@@ -1,6 +1,6 @@
 ---
 name: finishing-a-development-branch
-description: Use when implementation is complete and checks pass, to decide how to integrate the work. In this repo integration always goes through a pull request and the merge queue, never a local merge or a push to main.
+description: Use when implementation is complete and checks pass, to decide how to integrate the work. In this repo integration always goes through a pull request (and the merge queue, once it's enabled), never a local merge or a push to main.
 ---
 
 # Finishing a Development Branch
@@ -9,8 +9,8 @@ description: Use when implementation is complete and checks pass, to decide how 
 
 **Core principle:** Verify → Present options → Execute choice → Clean up only what you own.
 
-`main` changes only through pull requests and the merge queue (`CLAUDE.md` → Rules, rule 1). There
-is no local-merge option in this repo.
+`main` changes only through pull requests (`CLAUDE.md` → Rules, rule 1), and through the merge queue
+once it's enabled. There is no local-merge option in this repo.
 
 **Announce at start:** "I'm using the finishing-a-development-branch skill to complete this work."
 
@@ -82,11 +82,11 @@ gh pr create --base main --title "<type>: <summary>" --body-file <file>
 - **Body:** what changed and why; how it was verified (the command output); the linked issue.
 - **Infra, CI, Argo CD or policy changes** also need: the exact commands a human must run
   (`CLAUDE.md` → Rules, rule 2), the Infracost diff for infra changes (rule 6), and a note that
-  CODEOWNERS approval is required.
+  code owners are requested (`CLAUDE.md` → Review says what's enforced today).
 - **PR text is public.** Reread the title and body before creating the PR.
 
-Report the PR URL. Merging is the user's decision: once checks and approvals are green, the PR goes
-through the merge queue. Don't run `gh pr merge` unless the user asks.
+Report the PR URL. Merging is the user's decision: once checks and approvals are green, the PR is
+merged (through the merge queue, once it's enabled). Don't run `gh pr merge` unless the user asks.
 
 Keep the worktree: PR feedback gets fixed there.
 
@@ -157,10 +157,10 @@ Carry out the choice, then remove the worktree.
 
 | Excuse | Reality |
 |--------|---------|
-| "A local merge is quicker" | `main` changes only through PRs and the merge queue. There is no local-merge path. |
+| "A local merge is quicker" | `main` changes only through PRs. There is no local-merge path. |
 | "It's a one-line fix, I'll push it to main" | Never. One issue = one small PR, even for one line. |
 | "Checks passed earlier this session" | Run `make check` on the tree you're about to push. A green run only proves the tree it ran on. |
-| "They obviously want it merged" | Merging is the user's call, through the merge queue. Open the PR and wait. |
+| "They obviously want it merged" | Merging is the user's call. Open the PR and wait. |
 | "The push was rejected, force-push will fix it" | A rejected push means the remote moved. Investigate; force-push is denied in this repo's settings. |
 | "PR text is only for us" | PR titles and bodies are public. Reread them before creating. |
 | "The PR is up, so the worktree is clutter" | PR feedback gets fixed in that worktree. It stays until the work lands. |

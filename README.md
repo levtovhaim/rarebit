@@ -6,7 +6,7 @@ Each round shows a Hebrew letter and a category, and every player has 20 seconds
 
 ## Status
 
-Early setup: nothing runs yet. This first commit holds the contributor rules and the shared tooling for agents and reviewers. The game services, the CI golden path, the Kubernetes platform and the infrastructure arrive in small pull requests.
+Early setup: no game or platform runs yet. In place so far: the contributor rules, shared tooling for agents and reviewers, the CI runner evaluation ([results](docs/benchmarks/ci-runners.md)) and permission guardrails for agent sessions (ADRs [0006](docs/adr/0006-agent-permission-gate.md) and [0007](docs/adr/0007-infra-changes-by-human-approval.md)). The game services, the CI golden path, the Kubernetes platform and the infrastructure arrive in small pull requests.
 
 ## What it will include
 
@@ -16,7 +16,7 @@ Early setup: nothing runs yet. This first commit holds the contributor rules and
 
 ## Set up a machine
 
-1. Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes), and inside this directory it sets `AWS_PROFILE=rarebit`.
+1. On Windows, work inside WSL (Ubuntu): the tools, scripts and hooks assume a Linux shell ([ADR 0003](docs/adr/0003-tool-versions-with-mise.md)). Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes), and inside this directory it sets `AWS_PROFILE=rarebit`.
 2. Sign in to GitHub: `gh auth login`.
 3. Maintainers with AWS access only: `aws login --profile rarebit`. It gives short-lived credentials from a console sign-in, so no access keys are stored.
 
