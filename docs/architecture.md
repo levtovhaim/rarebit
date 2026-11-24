@@ -12,7 +12,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `apps/web` | React, Vite | Hebrew (RTL) UI for phones, served as static files by nginx-unprivileged; supports `BASE_PATH` | planned |
 | `apps/bots` | TypeScript | Simulated players: load tests, synthetic monitoring (a full game, exit 0 or 1), chaos observation, and the test arena's personas and bot swarm | planned |
 | `apps/content-agents` | scheduled agents | The answer curator and the category creator: they propose content changes as PRs to `data/` and never write to the database | planned |
-| `data/` | files in git | Word lists and categories, changed only by PR | planned |
+| `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Seeded with the six regular categories. | seeded |
 | `native/rarebit-cli` | C++ (CMake) | Word check and a local bots runner on Linux, Windows and macOS | planned |
 | Redis | | Room and matchmaking state, Socket.IO fan-out between game pods, the answer-event stream | planned |
 | Postgres | | Word lists, answer history, the rarity table | planned |

@@ -15,3 +15,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0009](0009-cpp-toolchain-cmake-presets.md) | Build the C++ code as C++20 with CMake presets, one per OS | accepted |
 | [0010](0010-c-api-at-the-cgo-boundary.md) | Expose native libraries to Go through a C API on a static archive | accepted |
 | [0011](0011-googletest-through-fetchcontent.md) | Test C++ with GoogleTest, fetched by CMake and pinned by hash | accepted |
+| [0012](0012-word-lists-as-json-per-category.md) | Keep word lists as one JSON file per category, each list with its own source and license | accepted |

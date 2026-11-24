@@ -77,6 +77,12 @@ repos:
         language: system
         files: ^\.claude/(hooks/|settings\.json$)
         pass_filenames: false
+      - id: word-lists
+        name: word lists (data/categories)
+        entry: python data/tools/check_data.py
+        language: system
+        files: ^data/
+        pass_filenames: false
       - id: terraform-fmt
         name: terraform fmt
         entry: bash -c 'rc=0; for f in "$@"; do terraform fmt -check -diff "$f" || rc=1; done; exit $rc' --
