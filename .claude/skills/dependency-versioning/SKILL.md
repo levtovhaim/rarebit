@@ -42,6 +42,7 @@ Compute the cutoff (`today − 7 days`); don't eyeball it.
 | Terraform providers, modules | `infra/` | `gh release view <tag> --repo <owner>/<repo> --json publishedAt` | exact `version` in `versions.tf` and module blocks; `.terraform.lock.hcl` committed |
 | Helm charts | `deploy/` | the `created` field of each version in the chart repo's `index.yaml`, or the GitHub release date | exact chart version / `targetRevision` |
 | Container base images | `apps/*/Dockerfile` | the upstream release date of the tag | `image:tag@sha256:<digest>`; get the digest with `docker buildx imagetools inspect <image>:<tag>` |
+| C++ (CMake `FetchContent`) | `native/cmake/*.cmake` | `gh release view <tag> --repo <owner>/<repo> --json publishedAt` | `URL` of an **uploaded release asset** (not GitHub's generated archive, whose bytes can change) plus `URL_HASH SHA256=…` from `sha256sum` of that file; a `# vX.Y.Z, published <date>` comment |
 | GitHub Actions | `.github/workflows/` | `gh release view <tag> --repo <owner>/<action> --json publishedAt` | `uses: <owner>/<action>@<full-sha> # vX.Y.Z`; get the SHA with `git ls-remote --tags https://github.com/<owner>/<action> '<tag>*'` (for an annotated tag, the `^{}` line is the commit) |
 
 The `# vX.Y.Z` comment after an Actions SHA is what lets Dependabot or Renovate keep bumping it.
