@@ -24,8 +24,25 @@ repos:
   - repo: local
     hooks:
       - id: gitleaks
-        name: gitleaks (secrets in staged changes)
-        entry: gitleaks git --pre-commit --staged --redact --no-banner
+        name: gitleaks (branch commits, uncommitted changes, new files)
+        # Scans everything this branch would add, staged or not:
+        #   1. commits since the base: GITLEAKS_BASE if set (CI passes the PR's base SHA; "all"
+        #      scans every commit), else the merge base with origin/main. No base means a shallow
+        #      or remote-less clone, and the hook fails instead of quietly scanning less.
+        #   2. lines added to tracked files, from a diff that ignores local diff settings
+        #      (external diff tools, textconv, colour) and shows "binary" files as text
+        #   3. new files that aren't ignored. Ignored files (a local .env) are skipped on purpose:
+        #      they never reach git.
+        entry: >-
+          bash -c 'set -euo pipefail;
+          if [ -n "${GITLEAKS_BASE:-}" ]; then base="$GITLEAKS_BASE";
+          elif ! base="$(git merge-base origin/main HEAD 2>/dev/null)"; then
+          echo "gitleaks: no merge base with origin/main (shallow clone or no remote). Fetch the full history, set GITLEAKS_BASE to the base commit, or set GITLEAKS_BASE=all to scan every commit." >&2; exit 1; fi;
+          if [ "$base" = all ]; then range=HEAD; else range="$base..HEAD"; fi;
+          gitleaks git --log-opts="--no-ext-diff --text $range" --redact --no-banner;
+          git diff --no-ext-diff --no-textconv --no-color --text --output-indicator-new=">" -U0 HEAD |
+          awk "/^>/ { print substr(\$0, 2) }" | gitleaks stdin --redact --no-banner;
+          git ls-files -z --others --exclude-standard | xargs -0 -r -n1 gitleaks dir --redact --no-banner --'
         language: system
         pass_filenames: false
         always_run: true
