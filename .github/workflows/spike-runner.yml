@@ -5,11 +5,13 @@
 # Results and interpretation: docs/benchmarks/ci-runners.md
 name: runner-spike
 
+# On demand only: the evaluation is done, so it no longer runs on every PR that edits this file.
+# This doesn't stop outside code on the vendor's runners. A fork PR runs the fork's own workflow
+# files, so it could add a trigger back or a new workflow with an incredibuild-* label. The
+# control for that is the repository setting that requires approval before workflows run for
+# external contributors: before approving one, check its .github/workflows/ changes and runs-on labels.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/spike-runner.yml
 
 permissions:
   contents: read
