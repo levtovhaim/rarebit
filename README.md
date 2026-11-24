@@ -16,7 +16,7 @@ Early setup: no game or platform runs yet. In place so far: the contributor rule
 
 ## Set up a machine
 
-1. On Windows, work inside WSL (Ubuntu): the tools, scripts and hooks assume a Linux shell ([ADR 0003](docs/adr/0003-tool-versions-with-mise.md)). Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes), and inside this directory it sets `AWS_PROFILE=rarebit`.
+1. On Windows, work inside WSL (Ubuntu): the tools, scripts and hooks assume a Linux shell ([ADR 0003](docs/adr/0003-tool-versions-with-mise.md)). Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes, CMake and Ninja), and inside this directory it sets `AWS_PROFILE=rarebit`. The C++ compiler for `make native` comes from the OS (on Ubuntu: `sudo apt install build-essential`).
 2. Sign in to GitHub: `gh auth login`.
 3. Maintainers with AWS access only: `aws login --profile rarebit`. It gives short-lived credentials from a console sign-in, so no access keys are stored.
 
