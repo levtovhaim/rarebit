@@ -43,7 +43,7 @@ A binary built the way `make validator` builds it fails in an image without a C 
   - the standard glibc toolchain, with no static-linking caveats;
   - the runtime image has no shell, no package manager and no compilers;
   - a library CVE is fixed by bumping the base image digest and rebuilding;
-  - 41 MB unpacked (about 16 MB compressed), checked by the smoke test.
+  - 42 MB unpacked (about 16 MB compressed), checked by the smoke test.
 - **Bad / risks:**
   - scanners report CVEs in everything the base ships, including OpenSSL, zlib and zstd, which the binary never loads, and the base digest needs regular bumps (Dependabot or Renovate);
   - the builder and runtime Debian releases must move together: a newer builder can produce a binary that needs a newer libstdc++ than the runtime has (`GLIBCXX_… not found` at start);

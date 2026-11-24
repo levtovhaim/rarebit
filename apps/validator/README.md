@@ -157,7 +157,7 @@ make validator-image-smoke   # builds it, then runs test/image-smoke.sh against 
 ```
 
 The smoke test runs the image as Kubernetes will: `--read-only`, every capability dropped, `no-new-privileges`. It checks:
-- the image: a numeric non-root user (65532), no shell, no world-writable, setuid or setgid files, at most 45 MB unpacked (41 MB today, about 16 MB compressed);
+- the image: a numeric non-root user (65532), no shell, no world-writable, setuid or setgid files, at most 45 MB unpacked (42 MB today, about 16 MB compressed);
 - `version` prints the same SHA as the image's revision label;
 - `check-ready` fails when nothing is serving;
 - `migrate` loads the word lists from the image, and a rerun changes nothing;
