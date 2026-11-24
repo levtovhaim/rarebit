@@ -25,6 +25,9 @@ Workflow: [`.github/workflows/spike-runner.yml`](../../.github/workflows/spike-r
 
 - actions by full commit SHA; Go 1.27.4; Redis source at the commit of tag 8.10.3; base image `busybox:1.37.0` by digest
 - the first run is **cold**; re-running the same workflow run gives the **warm** numbers
+- it runs **on demand only**: Actions → runner-spike → Run workflow, or `gh workflow run spike-runner.yml`. It no longer runs on pull requests that edit it.
+- removing that trigger isn't what keeps outside code off the vendor's runners. A fork pull request runs the fork's own workflow files, so it can add a trigger or a new workflow with an `incredibuild-*` label. The control is the repository setting that requires approval before workflows run for external contributors. Before approving such a run, check its `.github/workflows/` changes and `runs-on` labels.
+- the results below were measured with `actions/setup-go` v7.0.0; a re-run's job log shows which version it used
 
 ## What is measured
 
