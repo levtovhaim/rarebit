@@ -58,7 +58,8 @@ repos:
         files: ^\.github/workflows/[^/]+\.ya?ml$
       - id: shellcheck
         name: shellcheck
-        entry: shellcheck
+        # -x: follow `source`d files too (paths in `# shellcheck source=` are relative to the repo root)
+        entry: shellcheck -x
         language: system
         types: [shell]
       - id: hadolint

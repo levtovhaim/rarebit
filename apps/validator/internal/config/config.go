@@ -13,6 +13,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// DefaultAddr is the listen address when VALIDATOR_ADDR isn't set.
+const DefaultAddr = ":8080"
+
 // Config holds every setting. Field comments name the variable and its default.
 type Config struct {
 	Addr              string        // VALIDATOR_ADDR, ":8080"
@@ -34,7 +37,7 @@ func Load(getenv func(string) string) (Config, error) {
 	c := Config{RequestBodyLimit: 4 << 10, ReadHeaderTimeout: 5 * time.Second}
 	var errs []error
 
-	c.Addr = orDefault(getenv("VALIDATOR_ADDR"), ":8080")
+	c.Addr = orDefault(getenv("VALIDATOR_ADDR"), DefaultAddr)
 	c.DatabaseURL = getenv("DATABASE_URL")
 	if c.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))

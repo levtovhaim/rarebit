@@ -138,12 +138,12 @@ func (s *Server) Run(ctx context.Context, ln net.Listener, d Drain) error {
 		return err
 	case <-ctx.Done():
 	}
-	if d.OnStart != nil {
+	s.StartDrain()
+	srv.SetKeepAlivesEnabled(false)
+	if d.OnStart != nil { // after the switches, so anything it triggers sees the server draining
 		d.OnStart()
 	}
 	s.opts.Log.Info("draining", "drain_delay", d.Delay.String(), "shutdown_timeout", d.ShutdownTimeout.String())
-	s.StartDrain()
-	srv.SetKeepAlivesEnabled(false)
 	select {
 	case err := <-failed:
 		return err
@@ -250,4 +250,27 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// CheckReady asks a running server's /readyz on this host, for health checks in an image with no
+// shell or curl (`validator check-ready`). addr is the server's listen address, as in
+// VALIDATOR_ADDR; an empty host means the loopback address.
+func CheckReady(addr string, timeout time.Duration) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("listen address %q: %w", addr, err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Get("http://" + net.JoinHostPort(host, port) + "/readyz")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("/readyz returned %d", resp.StatusCode)
+	}
+	return nil
 }

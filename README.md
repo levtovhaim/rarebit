@@ -16,7 +16,7 @@ Early setup: no game or platform runs yet. In place so far: the contributor rule
 
 ## Set up a machine
 
-1. On Windows, work inside WSL (Ubuntu): the tools, scripts and hooks assume a Linux shell ([ADR 0003](docs/adr/0003-tool-versions-with-mise.md)). Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes, CMake and Ninja), and inside this directory it sets `AWS_PROFILE=rarebit`. The C/C++ compiler for `make native` and `make validator` comes from the OS (on Ubuntu: `sudo apt install build-essential`), and `make validator-integration` needs Docker.
+1. On Windows, work inside WSL (Ubuntu): the tools, scripts and hooks assume a Linux shell ([ADR 0003](docs/adr/0003-tool-versions-with-mise.md)). Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes, CMake and Ninja), and inside this directory it sets `AWS_PROFILE=rarebit`. The C/C++ compiler for `make native` and `make validator` comes from the OS (on Ubuntu: `sudo apt install build-essential`), `make validator-integration` needs Docker, and the image targets (`make validator-image`, `make validator-image-smoke`) need Docker with BuildKit (the default since Docker 23) and curl.
 2. Sign in to GitHub: `gh auth login`.
 3. Maintainers with AWS access only: `aws login --profile rarebit`. It gives short-lived credentials from a console sign-in, so no access keys are stored.
 

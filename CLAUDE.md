@@ -19,7 +19,7 @@
 - `native/`: C++ (CMake + CMakePresets), built and tested on Linux (gcc), Windows (MSVC) and macOS (clang).
   - `hebrew-normalize`: Hebrew normalization (niqqud, final letters, spelling variants), Unicode NFC/NFD, fuzzy matching
   - `rarebit-cli`: a cross-platform command-line tool (word check, local bots runner); tagged releases ship signed binaries for all three OSes
-- `data/`: word lists and categories as files. Content changes only by PR: data CI → preview → review → merge queue → the `validator migrate` Job.
+- `data/`: word lists and categories as files. Content changes only by PR: data CI → preview → review → merge queue → a new validator image → its `validator migrate` Job.
 - `ci/runner-policy.yaml`: which runner each job class (`heavy-build`, `docker`, `e2e`, `tf-plan`, `light`) uses on each OS.
 - `platform/cli`: `plat`, the golden-path CLI (Python + Typer). Commands: `status`, `doctor`, `env`, `new-service`, `bench`, `agents`, `cost`.
 - `deploy/`: one generic Helm chart (`charts/service`), Argo CD app-of-apps and ApplicationSets (platform, apps, previews), and per-env values.
@@ -42,7 +42,7 @@
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
 - `make check`: lint and tests. Today it lints every file (gofmt included) and runs the permission-gate tests and the word-list check (`data/tools/check_data.py`); it narrows to what changed once there's enough to test. Run it before every commit.
 - `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes.
-- `make validator`: build the library for cgo, then `go vet`, `go test -race` and `go build` in `apps/validator` (Linux; macOS unverified; on Windows in WSL). `make validator-integration` adds the Postgres tests against a throwaway container. Run both whenever `apps/validator` or `native/` changes. `make validator-image-smoke` builds the container image and runs it non-root and read-only against a throwaway Postgres: run it whenever the Dockerfile, `native/` or `data/` changes.
+- `make validator`: build the library for cgo, then `go vet`, `go test -race` and `go build` in `apps/validator` (Linux; macOS unverified; on Windows in WSL). `make validator-integration` adds the Postgres tests against a throwaway container. Run both whenever `apps/validator` or `native/` changes. `make validator-image-smoke` builds the container image and runs it non-root and read-only against a throwaway Postgres: run it whenever `apps/validator`, `native/` or `data/categories/` changes.
 - `make up` / `make smoke` / `make down`: local stack with docker compose; `smoke` = bots play a full game.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git.
 - `plat doctor`: verify tools, versions, AWS identity and kube context.

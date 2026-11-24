@@ -32,10 +32,10 @@ phone ──WebSocket──> game ──> validator ──> Postgres (word lists
 ## Content changes
 
 ```
-content agents / contributors ──PR──> data/ ──> data CI ──> preview ──> review ──> merge ──> validator migrate Job ──> Postgres
+content agents / contributors ──PR──> data/ ──> data CI ──> preview ──> review ──> merge ──> validator image build ──> validator migrate Job ──> Postgres
 ```
 
-Word lists and categories change only by pull request; the `validator migrate` Job is the only writer of content into the database. It computes each entry's keys with the same library `serve` uses on answers, and replaces the lists in one transaction (ADR 0014).
+Word lists and categories change only by pull request; the `validator migrate` Job is the only writer of content into the database. It computes each entry's keys with the same library `serve` uses on answers, and replaces the lists in one transaction (ADR 0014). The lists ship inside the validator image, so a content change is a new image, rolled out like a code change (ADR 0018).
 
 ## Data pipeline
 

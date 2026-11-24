@@ -53,7 +53,10 @@ Match the error in the log:
 | Error | Cause | Fix |
 |---|---|---|
 | `invalid configuration` | an env var is missing, out of range, or `DATABASE_URL isn't a valid Postgres URL`; the message lists each problem | fix the value in the chart (a PR), or the secret it comes from (SSM, through External Secrets: state-changing, see below) |
-| `no category files in <dir>/categories` | `VALIDATOR_DATA_DIR` is wrong, or the data files aren't in the image or the volume | fix the path or the packaging in the chart (a PR), then rerun the Job |
+| `no category files in <dir>/categories` | `VALIDATOR_DATA_DIR` isn't `/data`, or the image was built without `data/categories/` | fix the value in the chart, or `apps/validator/Dockerfile` / `Dockerfile.dockerignore` and rebuild (a PR), then rerun the Job |
+| `exec /validator: no such file or directory` at container start | the binary's dynamic loader or C library is missing: a wrong runtime base image (ADR 0017) | rebuild from the Dockerfile as committed; check that the runtime stage is `distroless/cc` |
+| `GLIBCXX_… not found` or `GLIBC_… not found` at container start | the builder's Debian release is newer than the runtime image's | move the builder and the runtime base to the same Debian release (ADR 0017), rebuild |
+| `FailedPreStopHook` in the pod's events, or exec probes failing | the image has no shell or tools: an `exec` hook or probe can't run | `httpGet` probes; `lifecycle.preStop.sleep`, or no preStop (apps/validator/README.md → Settings the chart must get right) |
 | `<file>.json: ...` | a category file the loader rejects (it reads every file before touching the database) | fix the file in a PR (`python data/tools/check_data.py` shows most problems), then rerun the Job |
 | `migration NNNN_x changed after it was applied` | someone edited a merged migration | revert the edit and add a new migration with the change |
 | `take the migration lock: ... deadline exceeded` | another run held the lock for the whole 5-minute run limit | find it: `SELECT pid, state, query_start, query FROM pg_stat_activity WHERE application_name = 'rarebit-validator-migrate';` If it's a stuck run, end it with `SELECT pg_terminate_backend(<pid>);` (state-changing), then rerun the Job |

@@ -21,3 +21,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0015](0015-validator-lookups-from-postgres.md) | Look up Postgres on every validation, and include the database in readiness | accepted |
 | [0016](0016-own-migration-runner.md) | Apply migrations with a small runner in the validator, not a migration tool | accepted |
 | [0017](0017-validator-image-distroless-cc.md) | Build the validator image in two stages and link glibc and libstdc++ dynamically, on distroless cc | accepted |
+| [0018](0018-word-lists-in-the-validator-image.md) | Ship the word lists in the validator image | accepted |

@@ -1,10 +1,22 @@
-# Build context for apps/validator/Dockerfile (the context is the repo root). An allowlist:
-# everything is excluded except what the build needs, so local files (.env, build output,
-# editor and tool config) never reach the builder.
+# Build context for apps/validator/Dockerfile (the context is the repo root; BuildKit reads this
+# file instead of the root .dockerignore). An allowlist of exactly what the build uses.
 *
 !native/CMakeLists.txt
 !native/cmake/
-!native/hebrew-normalize/
-!apps/validator/
+!native/hebrew-normalize/CMakeLists.txt
+!native/hebrew-normalize/include/
+!native/hebrew-normalize/src/
+!apps/validator/go.mod
+!apps/validator/go.sum
+!apps/validator/cmd/
+!apps/validator/internal/
 !data/categories/
+# A second guard inside those paths: build output and untracked local config never go in.
 **/build/
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*local.toml
+**/.vscode/
+**/.idea/

@@ -1,0 +1,4 @@
+# Builds that don't read a Dockerfile's own <name>.dockerignore (BuildKit does; the legacy builder
+# and some others don't) get an empty context here instead of the whole repository. Each image
+# lists what it needs in its own <Dockerfile>.dockerignore.
+*

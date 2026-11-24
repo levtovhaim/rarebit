@@ -1,12 +1,13 @@
 # validator
 
-Checks a player's answer against the word lists in Postgres. It normalizes the answer with [native/hebrew-normalize](../../native/hebrew-normalize/README.md), linked in through cgo, so every component compares answers the same way. One Go binary, three modes:
+Checks a player's answer against the word lists in Postgres. It normalizes the answer with [native/hebrew-normalize](../../native/hebrew-normalize/README.md), linked in through cgo, so every component compares answers the same way. One Go binary, four modes:
 
 | Mode | What it does | Runs as |
 |---|---|---|
 | `validator serve` | The HTTP API and the runtime endpoints | a Deployment |
 | `validator migrate` | Applies the schema migrations, then loads `data/categories/*.json` into Postgres | a Job, before each rollout |
 | `validator version` | Prints the git SHA | |
+| `validator check-ready` | Exits 0 if the server on this host answers `/readyz` with 200 (reads only `VALIDATOR_ADDR`) | a health check where only a command works (compose) |
 
 Decisions:
 - [ADR 0013](../../docs/adr/0013-validator-http-json-api.md): the HTTP/JSON API;
@@ -93,8 +94,15 @@ A second SIGTERM ends the process at once.
 
 ### Settings the chart must get right
 
-- **Grace period:** `terminationGracePeriodSeconds` must be longer than the drain delay + the shutdown timeout + 3 s (28 s with the defaults; Kubernetes' default is 30 s). A `preStop` sleep adds to that: use either a `preStop` sleep or `VALIDATOR_DRAIN_DELAY`, not both.
+- **The image has no shell or tools:** only `/validator`. An `exec` hook or probe (`sleep`, `sh`, `curl`) fails: a `preStop: exec: [sleep, ...]` hook logs `FailedPreStopHook`, and the pod gets SIGTERM at once.
+  - Probes must be `httpGet` (`/healthz`, `/readyz` on port 8080).
+  - For a pause before SIGTERM, use `lifecycle.preStop.sleep` (Kubernetes 1.30 and later), or better, no preStop at all: `VALIDATOR_DRAIN_DELAY` already keeps serving while readiness fails.
+  - Where only a command can check health (docker compose), use `["/validator", "check-ready"]`: it exits 0 when the server on that host answers `/readyz` with 200.
+- **Grace period:** `terminationGracePeriodSeconds` must be longer than any `preStop` sleep + the drain delay + the shutdown timeout + 3 s (28 s with the defaults and no preStop; Kubernetes' default is 30 s). Use either a `preStop` sleep or `VALIDATOR_DRAIN_DELAY`, not both.
 - **Probes:** the readiness handler takes up to 1 s, so `timeoutSeconds` must be 2 or more (Kubernetes' default of 1 would time out first), with `failureThreshold` 3 or more so one slow check doesn't take a pod out.
+- **Set `args`, never `command`:** `args: ["serve"]` for the Deployment, `args: ["migrate"]` for the Job. `command` replaces the image's entrypoint, and `command: ["/validator"]` with no args exits 2 (usage) and crash-loops.
+- **TLS to CloudNativePG:** `sslmode=verify-full` needs the cluster's own CA, which isn't in the image's system bundle. Mount the cluster's CA Secret read-only and add `sslrootcert=/path/to/ca.crt` to `DATABASE_URL`, or every connection fails with an x509 error.
+- **Each environment its own database:** two image versions against one database (previews sharing a dev database, say) overwrite each other's word lists on every migrate run.
 - **Connection budget:** (the most pods at once, HPA maximum + `maxSurge`) Ã— (`DB_MAX_CONNS` + 1) + the migrate Job + every other client must stay under Postgres `max_connections` (CloudNativePG default: 100).
 - **Migrate connects directly to the primary** (CloudNativePG's `-rw` Service), not through a transaction-mode pooler such as PgBouncer: its advisory lock belongs to the session.
 
@@ -135,12 +143,13 @@ curl -s -X POST localhost:8080/v1/validate -d '{"category":"country","letter":"×
 
 [`Dockerfile`](Dockerfile) builds in two stages ([ADR 0017](../../docs/adr/0017-validator-image-distroless-cc.md)):
 - **The builder** (`golang:1.27.4-trixie`) builds the library and the binary.
-- **The runtime image** (`gcr.io/distroless/cc-debian13:nonroot`) holds only:
+- **The runtime image** (`gcr.io/distroless/cc-debian13:nonroot`) adds to its base:
   - the binary, as `/validator`;
-  - the word lists, read-only, in `/data/categories`;
-  - glibc and libstdc++, which come with the base image.
+  - the word lists, read-only, in `/data/categories` ([ADR 0018](../../docs/adr/0018-word-lists-in-the-validator-image.md)).
 
-Both base images are pinned by digest. The build context is the repo root, limited by [`Dockerfile.dockerignore`](Dockerfile.dockerignore) to `native/`, `apps/validator/` and `data/categories/`.
+  The base has glibc and libstdc++, which the binary loads, plus OpenSSL, zlib, zstd, libgomp, tzdata and CA certificates, which it doesn't. It has no shell and no package manager.
+
+Both base images are pinned by digest. The build needs BuildKit (Docker's default builder since version 23): the context is the repo root, limited by [`Dockerfile.dockerignore`](Dockerfile.dockerignore) to the library's CMake files and sources, the validator's Go module, and `data/categories/`. Other builders get the root `.dockerignore`, which sends nothing. The image's version is HEAD's 7-character SHA, with `-dirty` when the tree has uncommitted changes.
 
 ```bash
 make validator-image         # builds rarebit-validator:dev (VALIDATOR_IMAGE=... to rename it)
@@ -148,13 +157,16 @@ make validator-image-smoke   # builds it, then runs test/image-smoke.sh against 
 ```
 
 The smoke test runs the image as Kubernetes will: `--read-only`, every capability dropped, `no-new-privileges`. It checks:
-- the image: non-root (uid 65532), no shell, no world-writable files, at most 45 MB unpacked (41 MB today, about 16 MB compressed);
-- `version` prints the git SHA from the `GIT_SHA` build arg;
+- the image: a numeric non-root user (65532), no shell, no world-writable, setuid or setgid files, at most 45 MB unpacked (41 MB today, about 16 MB compressed);
+- `version` prints the same SHA as the image's revision label;
+- `check-ready` fails when nothing is serving;
 - `migrate` loads the word lists from the image, and a rerun changes nothing;
-- `serve` gets ready and validates an answer;
+- `serve` gets ready and validates an answer, and `check-ready` succeeds inside the container;
 - SIGTERM drains and exits 0.
 
+It runs on Linux and in WSL. The JSON body goes to curl as bytes on stdin, so it also works where arguments get re-encoded (Git Bash).
+
 Running it:
-- **Deployment:** the default command is `serve`.
+- **Deployment:** the default arguments are `serve`.
 - **migrate Job:** the same image with `args: ["migrate"]`.
 - **Pod spec:** `runAsNonRoot: true` and `readOnlyRootFilesystem: true` both work; the process never writes to disk.
