@@ -57,7 +57,7 @@
    - `helm install`/`upgrade`/`uninstall`
    - any `aws` command that creates, changes or deletes something
 
-   Propose the command in the PR; a human runs it.
+   Propose the command in the PR; a human runs it. Claude Code prompts before these (`.claude/settings.json`). Plain read-only `aws` and `gh api` calls run without a prompt through `.claude/hooks/readonly-gate.sh` (ADR 0006); add a test row when you change it.
 3. **Use the golden path:**
    - new services via `plat new-service`
    - deploy with `deploy/charts/service` (its `values.schema.json` must pass)
