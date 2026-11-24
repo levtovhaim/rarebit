@@ -28,12 +28,6 @@ crash.log
 *.pem
 *.key
 kubeconfig*
-# Per-machine tool config (can hold tokens): mise local overrides, Terraform CLI config
-mise.local.toml
-.mise.local.toml
-mise.*.local.toml
-.terraformrc
-terraform.rc
 
 # Tools and editors
 .claude/settings.local.json

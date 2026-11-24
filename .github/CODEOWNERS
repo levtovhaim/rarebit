@@ -29,15 +29,36 @@
 # Decisions: an accepted ADR is superseded by a new one, never edited
 /docs/adr/                 @haimlevtov
 
-# Quality gates, tool versions and repository hygiene (an agent must not quietly weaken checks,
-# swap tools or stop ignoring local secrets)
+# Quality gates, tool versions and repository hygiene: an agent must not quietly weaken checks,
+# swap tools or stop ignoring local secrets. Some of these files don't exist yet. They're listed
+# because adding one (a .gitleaksignore, a mise.toml) changes what a check or a tool does.
 /Makefile                  @haimlevtov
 /.pre-commit-config.yaml   @haimlevtov
-/.mise.toml                @haimlevtov
 /.yamllint.yaml            @haimlevtov
-/.gitignore                @haimlevtov
-/.gitattributes            @haimlevtov
 /.editorconfig             @haimlevtov
+# Tool versions: every config file mise reads
+/.mise.toml                @haimlevtov
+/mise.toml                 @haimlevtov
+/mise.*.toml               @haimlevtov
+/.mise.*.toml              @haimlevtov
+/.tool-versions            @haimlevtov
+/.config/                  @haimlevtov
+/.mise/                    @haimlevtov
+/mise/                     @haimlevtov
+# Scanner and linter config, including allowlists that can switch a check off
+/.gitleaks.toml            @haimlevtov
+/.gitleaksignore           @haimlevtov
+/.trivyignore              @haimlevtov
+/trivy.yaml                @haimlevtov
+/.hadolint.yaml            @haimlevtov
+/.shellcheckrc             @haimlevtov
+/zizmor.yml                @haimlevtov
+/.tflint.hcl               @haimlevtov
+/renovate.json             @haimlevtov
+# At any depth: a nested .gitattributes can mark files binary (hiding them from diff-based
+# scans), and a nested .gitignore can change what's ignored
+.gitattributes             @haimlevtov
+.gitignore                 @haimlevtov
 
 # Rules, guardrails and playbooks for contributors and agents
 /CLAUDE.md                 @haimlevtov
