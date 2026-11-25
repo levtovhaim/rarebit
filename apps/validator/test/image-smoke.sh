@@ -97,6 +97,11 @@ if [ "${answer##*$'\n'}" != 200 ] || ! grep -q '"result":"valid"' <<<"$answer"; 
   fail "validate: $answer"
 fi
 pass "serve is ready and validates an answer"
+categories="$(curl -s --max-time 5 -w '\n%{http_code}' "$api/v1/categories")"
+if [ "${categories##*$'\n'}" != 200 ] || ! grep -q '"id":"country"' <<<"$categories"; then
+  fail "categories: $categories"
+fi
+pass "lists the playable categories"
 docker exec "${id}-serve" /validator check-ready || fail "check-ready inside the container: $(logs)"
 pass "check-ready succeeds inside the running container"
 docker stop -t 30 "${id}-serve" >/dev/null
