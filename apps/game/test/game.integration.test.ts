@@ -1,7 +1,7 @@
 // Game ↔ Redis, with several game servers as pods against one Redis (make game-integration starts
 // a throwaway Redis and sets TEST_REDIS_URL). Without it, these tests are skipped.
 import { createClient } from "redis";
-import type { Socket } from "socket.io-client";
+import { io as connect, type Socket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { call, client, next, REDIS_URL, startPod, testConfig, type Pod } from "./helpers.js";
 
@@ -168,6 +168,19 @@ run("the game against Redis", { timeout: 60_000 }, () => {
     await told;
     await draining;
     pods = [];
+  });
+
+  it("accepts WebSockets only from the allowed origins", async () => {
+    const a = await pod("a", testConfig({ ALLOWED_ORIGINS: "https://rarebit.example" }));
+    const open = (origin: string) =>
+      new Promise<boolean>((resolve) => {
+        const s = connect(`http://127.0.0.1:${a.port}`, { transports: ["websocket"], reconnection: false, forceNew: true, extraHeaders: { origin } });
+        sockets.push(s);
+        s.once("connect", () => resolve(true));
+        s.once("connect_error", () => resolve(false));
+      });
+    expect(await open("https://evil.example")).toBe(false);
+    expect(await open("https://rarebit.example")).toBe(true);
   });
 
   it("refuses offensive nicknames and exposes the game metrics", async () => {
