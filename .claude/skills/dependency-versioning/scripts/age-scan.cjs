@@ -21,8 +21,17 @@ const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // published on/b
 function lockPackages(json) { try { return JSON.parse(json).packages || {}; } catch { return {}; } }
 const cur = lockPackages(fs.readFileSync(root + '/' + lockPath, 'utf8'));
 let base = {};
-try { base = lockPackages(execFileSync('git', ['show', `${ref}:${lockPath}`], { cwd: root, maxBuffer: 1e9 }).toString()); }
-catch { console.error(`could not read ${lockPath} at ${ref}`); process.exit(2); }
+try { execFileSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: root }); }
+catch { console.error(`${ref} isn't a commit`); process.exit(2); }
+let atRef = true;
+try { execFileSync('git', ['cat-file', '-e', `${ref}:${lockPath}`], { cwd: root, stdio: 'ignore' }); }
+catch { atRef = false; } // a new lockfile: every package in it is new, so check them all
+if (atRef) {
+  try { base = lockPackages(execFileSync('git', ['show', `${ref}:${lockPath}`], { cwd: root, maxBuffer: 1e9 }).toString()); }
+  catch { console.error(`could not read ${lockPath} at ${ref}`); process.exit(2); }
+} else {
+  console.log(`${lockPath} doesn't exist at ${ref}: checking every package in it`);
+}
 
 const nameOf = k => k.replace(/.*node_modules\//, '');
 const keys = new Set([...Object.keys(cur), ...Object.keys(base)]);
