@@ -1,6 +1,6 @@
 # 0024. Run the local stack with docker compose, two game replicas behind nginx
 
-- **Status:** accepted
+- **Status:** accepted; the `make smoke` bullet is superseded by ADR 0025 (smoke runs the bots image)
 - **Date:** 2026-11-25
 - **Deciders:** platform owner
 

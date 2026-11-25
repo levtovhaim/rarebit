@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration up smoke down kind-up kind-down
+.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -70,6 +70,15 @@ bots-integration: ## Run the bots against two real game servers, a throwaway Red
 	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
 	cd apps/bots && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm run test:integration
 
+BOTS_IMAGE ?= rarebit-bots:dev
+
+bots-image: ## Build the bots image (apps/bots/Dockerfile; the context is the repo root)
+	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	docker build -f apps/bots/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(BOTS_IMAGE)" .
+
+bots-image-smoke: bots-image ## Check the bots image's contract: non-root, read-only, word lists, SIGTERM
+	bash apps/bots/test/image-smoke.sh "$(BOTS_IMAGE)"
+
 GAME_IMAGE ?= rarebit-game:dev
 
 game-image: ## Build the game image (apps/game/Dockerfile; the context is the repo root)
@@ -104,9 +113,8 @@ up: validator-image game-image ## Start the local stack (compose/compose.yaml) a
 	$(COMPOSE) up -d --wait --wait-timeout 180
 	@echo "up: http://127.0.0.1:$(RAREBIT_PORT) (make smoke plays a game through it; make down removes it all)"
 
-smoke: ## Bots play a full game through nginx against the running stack (needs make up and make bots)
-	test -f apps/bots/dist/main.js || { echo "apps/bots isn't built: run make bots first" >&2; exit 2; }
-	node apps/bots/dist/main.js synthetic --url "http://127.0.0.1:$(RAREBIT_PORT)" --origin "http://localhost:$(RAREBIT_PORT)" --timeout 300
+smoke: bots-image ## Bots play a full game through nginx against the running stack (make up first)
+	$(COMPOSE) run --rm bots synthetic --timeout 300
 
 down: ## Stop the local stack and remove its containers, network and data
 	$(COMPOSE) down --volumes --remove-orphans

@@ -154,3 +154,15 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "127.0.0.1:${RAREBIT_PORT:-8080}:8080"
+
+  # The bots, through nginx like any player: `make smoke` runs `docker compose run --rm bots
+  # synthetic`. In the `tools` profile, so `make up` doesn't start them.
+  bots:
+    <<: *hardened
+    image: rarebit-bots:dev
+    pull_policy: never
+    profiles: [tools]
+    environment:
+      BOTS_URL: http://nginx:8080
+      # An origin the game accepts (ALLOWED_ORIGINS above).
+      BOTS_ORIGIN: http://localhost:${RAREBIT_PORT:-8080}

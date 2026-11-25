@@ -1,0 +1,18 @@
+# Build context for apps/bots/Dockerfile (the context is the repo root; BuildKit reads this file
+# instead of the root .dockerignore). An allowlist of exactly what the build uses: no tests, no
+# local node_modules or dist.
+*
+!apps/bots/package.json
+!apps/bots/package-lock.json
+!apps/bots/.npmrc
+!apps/bots/tsconfig.json
+!apps/bots/tsconfig.build.json
+!apps/bots/src/
+!data/categories/
+# A second guard inside those paths: untracked local config never goes in.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/.vscode/
+**/.idea/

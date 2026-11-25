@@ -83,11 +83,24 @@ The built-in `scripted` strategy answers with a listed word 75% of the time, a m
 - **Load tests come from a few addresses:** the game accepts `MAX_CONNECTIONS_PER_IP` connections per address per pod (default 20). Raise it on the target, or connections fail with `too_many_connections`.
 - **Rooms are real rooms:** they live in the game's Redis until their TTL (10 minutes after a game ends).
 
+## Image
+
+[`Dockerfile`](Dockerfile) ([ADR 0025](../../docs/adr/0025-bots-image-and-smoke-from-it.md)), built like the game's (ADR 0022): `node:26.13.1-trixie-slim` to build, `gcr.io/distroless/nodejs26-debian13:nonroot` to run, both pinned by digest. The word lists are in `/data/categories` (`BOTS_WORDS_DIR`).
+
+- `ENTRYPOINT ["/nodejs/bin/node", "/app/dist/main.js"]`, `CMD ["synthetic"]`: the image alone runs the synthetic game; a Job's `args:` give another mode and its options, e.g. `args: ["observe", "--rooms", "10", "--duration", "600"]`.
+- Settings come from `BOTS_*` variables (Options, above), so a CronJob needs only `BOTS_URL` and `BOTS_ORIGIN`.
+- User `65532:65532`, a read-only root filesystem, no shell; Node is PID 1, so SIGTERM stops new games and the summary is still printed.
+- About 180 MB unpacked, almost all of it the Node binary.
+
+`make bots-image-smoke` checks it without a game server: the user, size and file modes, production dependencies only, the word lists, no shell; no options → exit 2 with the version in the log; a game against nowhere → exit 1 (the lists loaded); no lists → exit 2; SIGTERM → one node process that prints its summary and exits within seconds. A real game against the image is `make smoke`.
+
 ## Build and test
 
 ```bash
 make bots              # npm ci (scripts disabled), tsc type check, unit tests, build to dist/
 make bots-integration  # the bots against two real game servers (apps/game/dist), a throwaway Redis and a fake validator
+make bots-image        # the image, tagged rarebit-bots:dev
+make bots-image-smoke  # the image's contract (above)
 ```
 
 `make bots-integration` needs `make game` and `make bots` first. Its fake validator judges answers by the word lists: a listed word is valid, an unlisted one with the round's letter is unknown (so the room votes), anything else invalid.
