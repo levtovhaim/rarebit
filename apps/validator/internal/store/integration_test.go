@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -157,6 +158,45 @@ func TestMigrateLoadAndValidate(t *testing.T) {
 		t.Errorf("unknown category: err = %v", err)
 	}
 
+	// The playable categories: each lists exactly the letters with at least MinLetterWords
+	// entries, in alphabet order, and the real lists do have thinner letters that get skipped.
+	cats, err := db.Categories(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cats) != len(set.Categories) {
+		t.Errorf("Categories() = %d categories, want %d", len(cats), len(set.Categories))
+	}
+	counts, err := conn.Query(ctx, "SELECT category_id, first_letter, count(*) FROM words GROUP BY 1, 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, thin := map[string][]string{}, 0
+	for counts.Next() {
+		var category, letter string
+		var n int
+		if err := counts.Scan(&category, &letter, &n); err != nil {
+			t.Fatal(err)
+		}
+		if n >= validate.MinLetterWords {
+			want[category] = append(want[category], letter)
+		} else {
+			thin++
+		}
+	}
+	counts.Close()
+	byAlphabet := func(a, b string) int { return strings.Index(validate.Letters, a) - strings.Index(validate.Letters, b) }
+	for _, c := range cats {
+		expected := want[c.ID]
+		slices.SortFunc(expected, byAlphabet)
+		if strings.Join(c.Letters, "") != strings.Join(expected, "") {
+			t.Errorf("category %s letters = %v, want %v", c.ID, c.Letters, expected)
+		}
+	}
+	if thin == 0 {
+		t.Error("no letter has fewer than MinLetterWords entries, so the threshold went untested")
+	}
+
 	// A category removed from the files is retired: no longer served, its row kept, its words
 	// gone. Restoring the file brings it back.
 	gone := set.Categories[0].ID
@@ -168,6 +208,9 @@ func TestMigrateLoadAndValidate(t *testing.T) {
 	}
 	if ok, _ := db.CategoryExists(ctx, gone); ok {
 		t.Errorf("category %s is still served after its file went away", gone)
+	}
+	if listed, _ := db.Categories(ctx); slices.ContainsFunc(listed, func(c validate.Category) bool { return c.ID == gone }) {
+		t.Errorf("retired category %s is still in Categories()", gone)
 	}
 	var retired bool
 	var left int

@@ -32,6 +32,19 @@ type Outcome struct {
 	Key    string `json:"key"`              // the answer's comparison key
 }
 
+// Category is one the game can play: a live category and the round letters that have enough
+// entries in it (MinLetterWords) for a fair round.
+type Category struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Kind    string   `json:"kind"`
+	Letters []string `json:"letters"`
+}
+
+// MinLetterWords is how many entries a letter needs in a category before rounds use it: the
+// same threshold as THIN in data/tools/check_data.py.
+const MinLetterWords = 3
+
 // Candidate is a word-list entry considered for a typo match.
 type Candidate struct {
 	Word string

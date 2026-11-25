@@ -47,6 +47,14 @@ Errors from `/v1/validate` are JSON, `{"error": "<code>", "message": "..."}`:
 
 On a 503, or when no validator answers at all, the game should retry once (the call is read-only), then treat the answer as `unknown`. Other paths and methods (a `GET` on `/v1/validate`, say) get Go's plain-text 404 or 405.
 
+`GET /v1/categories` lists what a round can use: every live category, with the round letters that have at least `min_letter_words` (3) entries in it, in alphabet order. A letter with fewer entries isn't listed, so the game never picks it for that category. Retired categories, and categories with no such letter, don't appear.
+
+```json
+{"categories": [{"id": "country", "name": "ארץ", "kind": "regular", "letters": ["א", "ב", "ג"]}], "min_letter_words": 3}
+```
+
+The game caches it; it changes only with a content load. A 503 means Postgres failed or didn't answer within 3 s.
+
 ## Runtime endpoints
 
 | Endpoint | Meaning |

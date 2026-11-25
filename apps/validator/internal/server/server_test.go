@@ -34,7 +34,7 @@ func (f fakeReady) ContentNormalizer() string   { return f.normalizer }
 
 func newServer(v Validator, ready ReadyChecker) *Server {
 	return New(Options{
-		Validator: v, Ready: ready, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		Validator: v, Catalog: fakeCatalog{}, Ready: ready, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		Version: Version{Version: "abc1234", Normalizer: "0.1.0"}, BodyLimit: 256,
 		RequestTimeout: time.Second, ReadyTimeout: time.Second, ReadHeaderTimeout: time.Second,
 	})
@@ -246,6 +246,40 @@ func TestCheckReady(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := CheckReady(tt.addr, time.Second); (err != nil) != tt.wantErr {
 				t.Errorf("CheckReady(%q) = %v, want error: %v", tt.addr, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+type fakeCatalog struct {
+	list []validate.Category
+	err  error
+}
+
+func (f fakeCatalog) Categories(context.Context) ([]validate.Category, error) { return f.list, f.err }
+
+func TestCategories(t *testing.T) {
+	country := validate.Category{ID: "country", Name: "ארץ", Kind: "regular", Letters: []string{"א", "ב"}}
+	tests := []struct {
+		name     string
+		catalog  fakeCatalog
+		wantCode int
+		wantBody string
+	}{
+		{"listed", fakeCatalog{list: []validate.Category{country}}, 200, `"categories":[{"id":"country","name":"ארץ","kind":"regular","letters":["א","ב"]}]`},
+		{"none loaded: an empty array", fakeCatalog{}, 200, `"categories":[]`},
+		{"store down", fakeCatalog{err: errors.New("connection refused")}, 503, `"unavailable"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New(Options{
+				Validator: fakeValidator{}, Catalog: tt.catalog, Ready: fakeReady{},
+				Log: slog.New(slog.NewJSONHandler(io.Discard, nil)), BodyLimit: 256,
+				RequestTimeout: time.Second, ReadyTimeout: time.Second,
+			})
+			code, body := do(t, s, "GET", "/v1/categories", "")
+			if code != tt.wantCode || !strings.Contains(body, tt.wantBody) {
+				t.Errorf("got %d %s, want %d with %s", code, body, tt.wantCode, tt.wantBody)
 			}
 		})
 	}
