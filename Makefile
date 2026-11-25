@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke up smoke down kind-up kind-down
+.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -43,6 +43,19 @@ validator-integration: hebrew-lib ## Run the validator's Postgres tests against 
 	pg_start "$$name" $(POSTGRES_IMAGE); \
 	cd apps/validator && VALIDATOR_TEST_DATABASE_URL="postgres://postgres:$$PG_PASSWORD@127.0.0.1:$$(pg_port "$$name")/postgres?sslmode=disable" \
 		$(CGO_ENV) go test -race -tags integration -count=1 ./...
+
+REDIS_IMAGE := redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+
+game: ## Install the locked npm packages, type-check, unit-test and build apps/game
+	cd apps/game && npm ci --no-fund && npm run typecheck && npm test && npm run build && test -f dist/main.js
+
+game-integration: ## Run the game's Redis tests (several servers as pods) against a throwaway Redis (Docker)
+	name="rarebit-game-it-$$$$"; \
+	trap 'docker rm -f "$$name" >/dev/null 2>&1' EXIT; \
+	docker run -d --name "$$name" -p 127.0.0.1::6379 $(REDIS_IMAGE) >/dev/null; \
+	for _ in $$(seq 30); do docker exec "$$name" redis-cli ping 2>/dev/null | grep -q PONG && break; sleep 0.5; done; \
+	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
+	cd apps/game && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm run test:integration
 
 VALIDATOR_IMAGE ?= rarebit-validator:dev
 
