@@ -80,6 +80,12 @@ repos:
         language: system
         files: ^\.claude/(hooks/|settings\.json$)
         pass_filenames: false
+      - id: age-scan-tests
+        name: age-scan tests (dependency-versioning)
+        entry: node --test .claude/skills/dependency-versioning/scripts/age-scan.test.cjs
+        language: system
+        files: ^\.claude/skills/dependency-versioning/scripts/
+        pass_filenames: false
       - id: word-lists
         name: word lists (data/categories)
         entry: python data/tools/check_data.py

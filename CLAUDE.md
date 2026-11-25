@@ -40,7 +40,7 @@
 
 ## Commands
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
-- `make check`: lint and tests. Today it lints every file (gofmt included) and runs the permission-gate tests and the word-list check (`data/tools/check_data.py`); it narrows to what changed once there's enough to test. Run it before every commit.
+- `make check`: lint and tests. Today it lints every file (gofmt included) and runs the permission-gate tests, the dependency age-scan tests and the word-list check (`data/tools/check_data.py`); it narrows to what changed once there's enough to test. Run it before every commit.
 - `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes.
 - `make validator`: build the library for cgo, then `go vet`, `go test -race` and `go build` in `apps/validator` (Linux; macOS unverified; on Windows in WSL). `make validator-integration` adds the Postgres tests against a throwaway container. Run both whenever `apps/validator` or `native/` changes. `make validator-image-smoke` builds the container image and runs it non-root and read-only against a throwaway Postgres: run it whenever `apps/validator`, `native/` or `data/categories/` changes.
 - `make game`: `npm ci` (install scripts disabled), type check, unit tests and build in `apps/game`. `make game-integration` runs the Redis tests, with several game servers as pods, against a throwaway Redis container. Run both whenever `apps/game` changes.
