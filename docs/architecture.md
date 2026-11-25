@@ -30,6 +30,10 @@ phone ──WebSocket──> game ──> validator ──> Postgres (word lists
 - **Game → validator:** at the end of a round, one call per answer, and the playable categories (`GET /v1/categories`, cached for a minute and shared between game pods through Redis) before each round.
 - **Validator:** one HTTP call per answer. It normalizes the answer once, looks for an exact key match first, then a spelling variant or a one-edit typo among a few candidates ([hebrew-normalize](../native/hebrew-normalize/README.md)), with up to four indexed Postgres queries (ADR 0015). If it can't answer (503, or no ready pod), the game sends the answer to the room vote, as it does for `unknown` answers.
 
+## Local stack
+
+`make up` runs all of it on one machine with docker compose ([compose/](../compose/README.md), ADR 0024): nginx on `127.0.0.1:8080` in front of two game replicas (round robin, no sticky sessions), Redis, the validator, Postgres, and the `migrate` job that loads the word lists. Startup is gated on health: the validator waits for `migrate` to finish, the game for Redis. `make smoke` plays a bots game through nginx.
+
 ## Content changes
 
 ```

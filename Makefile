@@ -91,5 +91,26 @@ validator-image: ## Build the validator image (apps/validator/Dockerfile; the co
 validator-image-smoke: validator-image ## Run the image non-root and read-only against a throwaway Postgres
 	bash apps/validator/test/image-smoke.sh "$(VALIDATOR_IMAGE)" "$(POSTGRES_IMAGE)"
 
-up smoke down kind-up kind-down: ## Not implemented yet (they arrive with the services, the local stack and kind)
+COMPOSE := docker compose -f compose/compose.yaml
+# The port nginx publishes on 127.0.0.1; compose reads it from the environment.
+RAREBIT_PORT ?= 8080
+export RAREBIT_PORT
+
+# The stack's Postgres password is random and kept in compose/.env (git-ignored; compose reads it)
+# for as long as the stack exists, so a second `make up` reuses it. `make down` removes it with
+# the database.
+up: validator-image game-image ## Start the local stack (compose/compose.yaml) and wait until it's healthy
+	test -f compose/.env || printf 'RAREBIT_PG_PASSWORD=%s\n' "$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')" > compose/.env
+	$(COMPOSE) up -d --wait --wait-timeout 180
+	@echo "up: http://127.0.0.1:$(RAREBIT_PORT) (make smoke plays a game through it; make down removes it all)"
+
+smoke: ## Bots play a full game through nginx against the running stack (needs make up and make bots)
+	test -f apps/bots/dist/main.js || { echo "apps/bots isn't built: run make bots first" >&2; exit 2; }
+	node apps/bots/dist/main.js synthetic --url "http://127.0.0.1:$(RAREBIT_PORT)" --origin "http://localhost:$(RAREBIT_PORT)" --timeout 300
+
+down: ## Stop the local stack and remove its containers, network and data
+	$(COMPOSE) down --volumes --remove-orphans
+	rm -f compose/.env
+
+kind-up kind-down: ## Not implemented yet (they arrive with kind)
 	@echo "make $@: not implemented yet" >&2; exit 2
