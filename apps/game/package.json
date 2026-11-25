@@ -1,0 +1,39 @@
+{
+  "name": "@rarebit/game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rarebit game server: rooms, rounds and scoring over Socket.IO, with all state in Redis",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "26.x"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@prometheus-io/client": "0.16.1",
+    "@socket.io/redis-adapter": "8.3.0",
+    "pino": "10.4.0",
+    "redis": "6.3.1",
+    "socket.io": "4.8.4",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "socket.io-client": "4.8.4",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  },
+  "overrides": {
+    "@types/estree": "1.0.10",
+    "engine.io": "6.6.11",
+    "socket.io-adapter": "2.5.8",
+    "source-map-js": "1.2.2",
+    "tinybench": "6.2.3",
+    "tinyexec": "1.3.1"
+  }
+}
