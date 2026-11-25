@@ -9,7 +9,8 @@
 //
 // Usage:   node .claude/skills/dependency-versioning/scripts/age-scan.cjs [gitRef] [lockfile]   (from the repo root)
 // Example: node .claude/skills/dependency-versioning/scripts/age-scan.cjs HEAD apps/game/package-lock.json
-// Exit:    0 if no <7-day change, 1 if any version <7 days old.
+// A lockfile that doesn't exist at gitRef (a new app) has every package checked.
+// Exit:    0 if no <7-day change, 1 if any version <7 days old, 2 if gitRef isn't a commit or the lockfile can't be read.
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const root = process.cwd();
@@ -21,8 +22,17 @@ const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // published on/b
 function lockPackages(json) { try { return JSON.parse(json).packages || {}; } catch { return {}; } }
 const cur = lockPackages(fs.readFileSync(root + '/' + lockPath, 'utf8'));
 let base = {};
-try { base = lockPackages(execFileSync('git', ['show', `${ref}:${lockPath}`], { cwd: root, maxBuffer: 1e9 }).toString()); }
-catch { console.error(`could not read ${lockPath} at ${ref}`); process.exit(2); }
+try { execFileSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: root }); }
+catch { console.error(`${ref} isn't a commit`); process.exit(2); }
+let atRef = true;
+try { execFileSync('git', ['cat-file', '-e', `${ref}:${lockPath}`], { cwd: root, stdio: 'ignore' }); }
+catch { atRef = false; } // a new lockfile: every package in it is new, so check them all
+if (atRef) {
+  try { base = lockPackages(execFileSync('git', ['show', `${ref}:${lockPath}`], { cwd: root, maxBuffer: 1e9 }).toString()); }
+  catch { console.error(`could not read ${lockPath} at ${ref}`); process.exit(2); }
+} else {
+  console.log(`${lockPath} doesn't exist at ${ref}: checking every package in it`);
+}
 
 const nameOf = k => k.replace(/.*node_modules\//, '');
 const keys = new Set([...Object.keys(cur), ...Object.keys(base)]);
