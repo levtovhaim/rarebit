@@ -19,7 +19,7 @@ id="rarebit-game-smoke-$$"
 hardened=(--read-only --cap-drop ALL --security-opt no-new-privileges)
 
 cleanup() {
-  docker rm -f "${id}-files" "${id}-redis" "${id}-serve" "${id}-config" >/dev/null 2>&1 || true
+  docker rm -fv "${id}-files" "${id}-redis" "${id}-serve" "${id}-config" >/dev/null 2>&1 || true
   docker network rm "$id" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -42,7 +42,7 @@ pass "runs as user $user"
 # image's reported size (compressed on some, unpacked on others).
 docker create --name "${id}-files" "$image" >/dev/null
 listing="$(docker export "${id}-files" | tar -tv)"
-docker rm "${id}-files" >/dev/null
+docker rm -v "${id}-files" >/dev/null
 size_mb="$(awk '{s += $3} END {printf "%d", s / 1000000}' <<<"$listing")"
 [ "$size_mb" -le "$max_mb" ] || fail "the image is $size_mb MB unpacked, over the $max_mb MB limit"
 pass "$size_mb MB unpacked (limit $max_mb MB)"

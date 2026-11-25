@@ -7,7 +7,8 @@
 # Starts a container with a random password and waits until it accepts TCP connections. With a
 # network, other containers reach it as <name>:5432; without one, it's published on a random
 # loopback port (pg_port prints it). Sets PG_PASSWORD. Removing the container is the caller's
-# job (docker rm -f <name>, usually in a trap).
+# job (docker rm -fv <name>, usually in a trap: -v removes the anonymous volume the image
+# declares for its data, which `docker rm -f` alone leaves behind).
 
 pg_start() {
   local name="$1" image="$2" network="${3:-}"

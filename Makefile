@@ -39,7 +39,7 @@ validator: hebrew-lib ## Vet, test (race detector) and build apps/validator into
 validator-integration: hebrew-lib ## Run the validator's Postgres tests against a throwaway container (Docker)
 	. apps/validator/test/pg.sh; \
 	name="rarebit-validator-it-$$$$"; \
-	trap 'docker rm -f "$$name" >/dev/null 2>&1' EXIT; \
+	trap 'docker rm -fv "$$name" >/dev/null 2>&1' EXIT; \
 	pg_start "$$name" $(POSTGRES_IMAGE); \
 	cd apps/validator && VALIDATOR_TEST_DATABASE_URL="postgres://postgres:$$PG_PASSWORD@127.0.0.1:$$(pg_port "$$name")/postgres?sslmode=disable" \
 		$(CGO_ENV) go test -race -tags integration -count=1 ./...
@@ -51,7 +51,7 @@ game: ## Install the locked npm packages, type-check, unit-test and build apps/g
 
 game-integration: ## Run the game's Redis tests (several servers as pods) against a throwaway Redis (Docker)
 	name="rarebit-game-it-$$$$"; \
-	trap 'docker rm -f "$$name" >/dev/null 2>&1' EXIT; \
+	trap 'docker rm -fv "$$name" >/dev/null 2>&1' EXIT; \
 	docker run -d --name "$$name" -p 127.0.0.1::6379 $(REDIS_IMAGE) >/dev/null; \
 	for _ in $$(seq 30); do docker exec "$$name" redis-cli ping 2>/dev/null | grep -q PONG && break; sleep 0.5; done; \
 	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
@@ -64,7 +64,7 @@ bots-integration: ## Run the bots against two real game servers, a throwaway Red
 	test -f apps/game/dist/main.js || { echo "apps/game isn't built: run make game first" >&2; exit 2; }; \
 	test -f apps/bots/dist/main.js || { echo "apps/bots isn't built: run make bots first" >&2; exit 2; }; \
 	name="rarebit-bots-it-$$$$"; \
-	trap 'docker rm -f "$$name" >/dev/null 2>&1' EXIT; \
+	trap 'docker rm -fv "$$name" >/dev/null 2>&1' EXIT; \
 	docker run -d --name "$$name" -p 127.0.0.1::6379 $(REDIS_IMAGE) >/dev/null; \
 	for _ in $$(seq 30); do docker exec "$$name" redis-cli ping 2>/dev/null | grep -q PONG && break; sleep 0.5; done; \
 	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
