@@ -1,0 +1,156 @@
+# The local stack: everything the game needs, on one machine, run the way the cluster will run it.
+# Start it with `make up`, play it with `make smoke`, remove it with `make down` (CLAUDE.md →
+# Commands). Only nginx publishes a port, on 127.0.0.1; everything else talks on the stack's
+# own network.
+#
+#   phone/bots ──> nginx :8080 ──> game-1 ─┐
+#                              └─> game-2 ─┴──> redis
+#                                          └──> validator ──> postgres <── migrate (once)
+#
+# Images: `make up` builds rarebit-validator:dev and rarebit-game:dev first (the same Make
+# targets as the image smoke tests), so compose never builds or pulls our own images.
+name: rarebit
+
+# How our services run in Kubernetes too (CLAUDE.md → Rules, rule 7): read-only root
+# filesystem, no Linux capabilities, no privilege escalation. The images set a non-root user.
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+x-game: &game
+  <<: *hardened
+  image: rarebit-game:dev
+  pull_policy: never
+  environment:
+    REDIS_URL: redis://redis:6379
+    VALIDATOR_URL: http://validator:8080
+    # The pages that may open a WebSocket: the web UI (served by nginx, later) and `make smoke`.
+    ALLOWED_ORIGINS: http://localhost:${RAREBIT_PORT:-8080},http://127.0.0.1:${RAREBIT_PORT:-8080}
+    # nginx appends the client's address to X-Forwarded-For: one trusted hop.
+    TRUSTED_PROXY_HOPS: "1"
+    # Shorter games than the defaults, for a local stack; override in the environment.
+    ROUND_SECONDS: ${RAREBIT_ROUND_SECONDS:-15}
+    MAX_ROUNDS: ${RAREBIT_MAX_ROUNDS:-3}
+    QUICKPLAY_COUNTDOWN_SECONDS: ${RAREBIT_COUNTDOWN_SECONDS:-5}
+    DRAIN_DELAY_SECONDS: "3"
+    SHUTDOWN_TIMEOUT_SECONDS: "10"
+    LOG_LEVEL: info
+  # More than DRAIN_DELAY_SECONDS + 1 + SHUTDOWN_TIMEOUT_SECONDS (apps/game/README.md → Shutdown).
+  stop_grace_period: 20s
+  restart: unless-stopped
+  # Healthy = /readyz is 200: all three Redis connections up and a write succeeds, not draining.
+  healthcheck:
+    test: ["CMD", "/nodejs/bin/node", "/app/dist/check-ready.js"]
+    interval: 5s
+    timeout: 3s
+    retries: 3
+    start_period: 30s
+    start_interval: 1s
+  # Redis only: it's the game's one hard dependency. Without a ready validator the game still
+  # starts, and rounds wait for the categories, as they would in the cluster.
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:18.7@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b
+    # The data lives in the image's anonymous volume: `make down` removes it with the stack.
+    environment:
+      POSTGRES_PASSWORD: ${RAREBIT_PG_PASSWORD:?run make up, which generates it}
+    restart: unless-stopped
+    # Over TCP, not the socket: on its first start the image runs a socket-only server to
+    # initialize, then restarts; only the real server listens on 127.0.0.1.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
+      start_interval: 1s
+
+  migrate:
+    <<: *hardened
+    image: rarebit-validator:dev
+    pull_policy: never
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: postgres://postgres:${RAREBIT_PG_PASSWORD}@postgres:5432/postgres?sslmode=disable
+    # A one-shot job: it loads the schema and the word lists, then exits 0.
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  validator:
+    <<: *hardened
+    image: rarebit-validator:dev
+    pull_policy: never
+    command: ["serve"]
+    environment:
+      DATABASE_URL: postgres://postgres:${RAREBIT_PG_PASSWORD}@postgres:5432/postgres?sslmode=disable
+      VALIDATOR_DRAIN_DELAY: 2s
+    stop_grace_period: 30s
+    restart: unless-stopped
+    # Healthy = /readyz is 200: Postgres answers, the schema is current, the word lists loaded.
+    healthcheck:
+      test: ["CMD", "/validator", "check-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+    # Started after the migration finished, not merely started: before that its readiness
+    # would fail (no schema, no word lists) and only add noise.
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  redis:
+    <<: *hardened
+    image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    # As the game expects (ADR 0019): never evict a key; no persistence in a local stack.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "noeviction"]
+    # The image's redis user. Started as root, its entrypoint would need capabilities to switch.
+    user: "999:1000"
+    tmpfs: [/data]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+      start_interval: 1s
+
+  game-1: *game
+  game-2: *game
+
+  nginx:
+    <<: *hardened
+    image: nginxinc/nginx-unprivileged:1.31.7-alpine3.24@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e # yamllint disable-line rule:line-length
+    # nginx itself, not the image's entrypoint scripts: they rewrite files under /etc/nginx,
+    # which a read-only filesystem doesn't allow.
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    # nginx's own liveness (it answers /healthz itself), with Alpine's wget.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+      start_interval: 1s
+    # Started, not healthy: nginx routes around a replica that's down (it re-resolves names and
+    # retries the other), so one broken replica mustn't keep the entry point down.
+    depends_on:
+      game-1:
+        condition: service_started
+      game-2:
+        condition: service_started
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:${RAREBIT_PORT:-8080}:8080"

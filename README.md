@@ -6,7 +6,7 @@ Each round shows a Hebrew letter and a category, and every player has 20 seconds
 
 ## Status
 
-Early setup: no game or platform runs yet. In place so far: the contributor rules, shared tooling for agents and reviewers, the CI runner evaluation ([results](docs/benchmarks/ci-runners.md)), permission guardrails for agent sessions (ADRs [0006](docs/adr/0006-agent-permission-gate.md) and [0007](docs/adr/0007-infra-changes-by-human-approval.md)), the C++ Hebrew normalization library ([native/hebrew-normalize](native/hebrew-normalize/README.md), `make native`), seed word lists for the six regular categories ([data/](data/README.md)), the Go validator that checks answers against them in Postgres, with its container image ([apps/validator](apps/validator/README.md), `make validator`, `make validator-image-smoke`), the game server, which keeps every room in Redis so any pod can serve it, with its container image ([apps/game](apps/game/README.md), `make game`, `make game-image-smoke`), and the bots that play it: the synthetic game, load tests and the chaos observer ([apps/bots](apps/bots/README.md), `make bots`). What exists and what's planned: [docs/architecture.md](docs/architecture.md). The web UI, the CI golden path, the Kubernetes platform and the infrastructure arrive in small pull requests.
+Early setup: the game's services run together locally (`make up`, below); no platform yet, and no web UI to play on. In place so far: the contributor rules, shared tooling for agents and reviewers, the CI runner evaluation ([results](docs/benchmarks/ci-runners.md)), permission guardrails for agent sessions (ADRs [0006](docs/adr/0006-agent-permission-gate.md) and [0007](docs/adr/0007-infra-changes-by-human-approval.md)), the C++ Hebrew normalization library ([native/hebrew-normalize](native/hebrew-normalize/README.md), `make native`), seed word lists for the six regular categories ([data/](data/README.md)), the Go validator that checks answers against them in Postgres, with its container image ([apps/validator](apps/validator/README.md), `make validator`, `make validator-image-smoke`), the game server, which keeps every room in Redis so any pod can serve it, with its container image ([apps/game](apps/game/README.md), `make game`, `make game-image-smoke`), the bots that play it: the synthetic game, load tests and the chaos observer ([apps/bots](apps/bots/README.md), `make bots`), and the local stack that runs them all ([compose/](compose/README.md)). What exists and what's planned: [docs/architecture.md](docs/architecture.md). The web UI, the CI golden path, the Kubernetes platform and the infrastructure arrive in small pull requests.
 
 ## What it will include
 
@@ -19,6 +19,19 @@ Early setup: no game or platform runs yet. In place so far: the contributor rule
 1. On Windows, work inside WSL (Ubuntu): the tools, scripts and hooks assume a Linux shell ([ADR 0003](docs/adr/0003-tool-versions-with-mise.md)). Install [mise](https://mise.jdx.dev), then run `mise install` in the repo root. It installs the pinned tool versions from `.mise.toml` (Terraform, Terragrunt, kubectl, Helm, kind, linters and scanners, language runtimes, CMake and Ninja), and inside this directory it sets `AWS_PROFILE=rarebit`. The C/C++ compiler for `make native` and `make validator` comes from the OS (on Ubuntu: `sudo apt install build-essential`), `make validator-integration` needs Docker, and the image targets (`make validator-image`, `make validator-image-smoke`) need Docker with BuildKit (the default since Docker 23) and curl.
 2. Sign in to GitHub: `gh auth login`.
 3. Maintainers with AWS access only: `aws login --profile rarebit`. It gives short-lived credentials from a console sign-in, so no access keys are stored.
+
+## Run it locally
+
+With Docker running:
+
+```bash
+make bots    # once: builds the bots that make smoke runs
+make up      # Postgres, the validator, Redis, two game servers behind nginx on 127.0.0.1:8080
+make smoke   # three bots play a full game through it
+make down    # removes it all
+```
+
+What runs and how: [compose/README.md](compose/README.md).
 
 ## Contributing
 
