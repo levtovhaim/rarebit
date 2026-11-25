@@ -22,3 +22,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0016](0016-own-migration-runner.md) | Apply migrations with a small runner in the validator, not a migration tool | accepted |
 | [0017](0017-validator-image-distroless-cc.md) | Build the validator image in two stages and link glibc and libstdc++ dynamically, on distroless cc | accepted |
 | [0018](0018-word-lists-in-the-validator-image.md) | Ship the word lists in the validator image | accepted |
+| [0019](0019-game-state-and-timers-in-redis.md) | Keep game state, timers and matchmaking in Redis, advanced by whichever pod gets the lease | accepted |
+| [0020](0020-game-client-protocol.md) | Speak to game clients in Socket.IO events with acknowledgements, resume tokens and server deadlines | accepted |

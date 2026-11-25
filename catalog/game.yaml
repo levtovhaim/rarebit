@@ -1,0 +1,23 @@
+# Service catalog entry (catalog/README.md).
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: game
+  description: The game server. Rooms, rounds, the vote and scoring over Socket.IO, with all state in Redis.
+  labels:
+    tier: "1" # without it nobody can play
+  links:
+    - url: https://github.com/levtovhaim/rarebit/blob/main/docs/runbooks/game.md
+      title: Runbook
+    - url: https://github.com/levtovhaim/rarebit/blob/main/apps/game/README.md
+      title: README
+spec:
+  type: service
+  lifecycle: experimental
+  owner: user:haimlevtov
+  system: rarebit
+  dependsOn:
+    - resource:redis
+    - component:validator
+# SLOs: none yet. They come with the monitoring stack; the indicators will be answer
+# acknowledgement latency (game_answer_ack_seconds) and games that finish (the bots' synthetic game).
