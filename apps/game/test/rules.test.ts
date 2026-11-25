@@ -167,6 +167,12 @@ describe("cleanNickname and cleanAnswer", () => {
     { raw: "x".repeat(17), want: null },
     { raw: "<script>", want: null },
     { raw: "דני   כהן", want: "דני כהן" },
+    { raw: "O'Neil_2-b", want: "O'Neil_2-b" },
+    // Only Hebrew and Latin, which the filter reads: a Cyrillic "с" in a Latin word would hide it.
+    { raw: "Ваня", want: null },
+    { raw: "fuсk", want: null },
+    { raw: "דָנִי", want: null },
+    { raw: "דני‏", want: null },
   ])("nickname $raw → $want", ({ raw, want }) => {
     expect(cleanNickname(raw)).toBe(want);
   });

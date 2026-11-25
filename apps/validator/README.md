@@ -45,7 +45,7 @@ Errors from `/v1/validate` are JSON, `{"error": "<code>", "message": "..."}`:
 | 413 | `too_large` | the body is over 4 KiB |
 | 503 | `unavailable` | Postgres failed or didn't answer within 3 s |
 
-On a 503, or when no validator answers at all, the game should retry once (the call is read-only), then treat the answer as `unknown`. Other paths and methods (a `GET` on `/v1/validate`, say) get Go's plain-text 404 or 405.
+On a 503, or when no validator answers at all, the game retries once (the call is read-only), then treats the answer as `unknown` (apps/game/README.md → The game). Other paths and methods (a `GET` on `/v1/validate`, say) get Go's plain-text 404 or 405.
 
 ## Runtime endpoints
 

@@ -39,6 +39,9 @@ interface SocketData {
   playerId?: string;
 }
 
+/** Joins and resumes refused for a wrong room code or token before the socket is cut off. */
+const MAX_FAILED_JOINS = 5;
+
 /** 10 events in a burst, then 5 a second. */
 function bucket(capacity = 10, perSecond = 5) {
   let tokens = capacity;
@@ -63,6 +66,7 @@ export function attachSockets(
   io.on("connection", (socket: Socket) => {
     const data = socket.data as SocketData;
     const take = bucket();
+    let failedJoins = 0;
 
     function bound(): { code: string; playerId: string } {
       if (!data.roomCode || !data.playerId) throw new GameError("not_in_room");
@@ -74,11 +78,38 @@ export function attachSockets(
       if (deps.draining()) throw new GameError("draining");
     }
 
-    async function bind(joined: Joined) {
-      if (data.roomCode) await socket.leave(data.roomCode);
-      data.roomCode = joined.room.code;
-      data.playerId = joined.player.id;
-      await socket.join(joined.room.code);
+    /** Counts guesses at room codes and tokens; the socket is closed after MAX_FAILED_JOINS. */
+    async function guarded<T>(work: () => Promise<T>): Promise<T> {
+      try {
+        return await work();
+      } catch (err) {
+        if (err instanceof GameError && (err.code === "not_found" || err.code === "bad_token") && ++failedJoins >= MAX_FAILED_JOINS) {
+          deps.log.info({ failed_joins: failedJoins }, "too many failed joins; closing the connection");
+          setTimeout(() => socket.disconnect(true), 0); // after the reply goes out
+        }
+        throw err;
+      }
+    }
+
+    /**
+     * One seat per socket: binding to a new seat leaves the one the socket held before, after the
+     * new one succeeded (a mistyped room code doesn't cost the old seat).
+     */
+    async function bind(code: string, playerId: string) {
+      const prev = data.roomCode && data.playerId ? { code: data.roomCode, playerId: data.playerId } : null;
+      data.roomCode = code;
+      data.playerId = playerId;
+      await socket.join(code);
+      if (!prev || (prev.code === code && prev.playerId === playerId)) return;
+      if (prev.code !== code) await socket.leave(prev.code);
+      await engine.leave(prev.code, prev.playerId).catch((err: unknown) => {
+        deps.metrics.redisErrorsTotal.inc();
+        deps.log.warn({ err: String(err), room_id: prev.code }, "couldn't leave the previous seat");
+      });
+    }
+
+    async function seat(joined: Joined) {
+      await bind(joined.room.code, joined.player.id);
       return { roomCode: joined.room.code, playerId: joined.player.id, token: joined.token, state: snapshot(joined.room, now()) };
     }
 
@@ -105,27 +136,27 @@ export function attachSockets(
 
     on("room:create", async ({ nickname: nick }) => {
       notDraining();
-      return bind(await engine.createPrivate(nick, socket.id));
+      return seat(await engine.createPrivate(nick, socket.id));
     });
 
     on("room:join", async ({ roomCode: code, nickname: nick }) => {
       notDraining();
-      return bind(await engine.joinPrivate(code, nick, socket.id));
+      return seat(await guarded(() => engine.joinPrivate(code, nick, socket.id)));
     });
 
     on("quickplay:join", async ({ nickname: nick }) => {
       notDraining();
-      return bind(await engine.joinQuickplay(nick, socket.id));
+      return seat(await engine.joinQuickplay(nick, socket.id));
     });
 
     on("room:resume", async ({ roomCode: code, playerId, token }) => {
       notDraining();
-      const room = await engine.resume(code, playerId, token, socket.id);
-      if (data.roomCode && data.roomCode !== code) await socket.leave(data.roomCode);
-      data.roomCode = code;
-      data.playerId = playerId;
-      await socket.join(code);
-      return { state: snapshot(room, now()) };
+      const resumed = await guarded(() => engine.resume(code, playerId, token, socket.id));
+      await bind(code, playerId);
+      // The seat's older connection (another tab, or a socket the pod hasn't noticed is dead) is
+      // closed, on whichever pod holds it.
+      if (resumed.previousConn) io.in(resumed.previousConn).disconnectSockets(true);
+      return { token: resumed.token, state: snapshot(resumed.room, now()) };
     });
 
     on("game:start", async () => {

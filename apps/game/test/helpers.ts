@@ -11,6 +11,7 @@ export function testConfig(over: Record<string, string> = {}): Config {
   return loadConfig({
     REDIS_URL,
     VALIDATOR_URL: "http://127.0.0.1:1", // unused: the tests pass a fake validator
+    ALLOWED_ORIGINS: "*",
     ROUND_SECONDS: "3",
     VOTE_SECONDS: "2",
     RESULTS_SECONDS: "1",
@@ -52,7 +53,10 @@ export async function client(pod: Pod): Promise<Socket> {
   const socket = connect(`http://127.0.0.1:${pod.port}`, { transports: ["websocket"], reconnection: false, forceNew: true });
   await new Promise<void>((resolve, reject) => {
     socket.once("connect", () => resolve());
-    socket.once("connect_error", reject);
+    socket.once("connect_error", (err) => {
+      socket.disconnect();
+      reject(err);
+    });
   });
   return socket;
 }

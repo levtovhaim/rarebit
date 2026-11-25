@@ -20,7 +20,7 @@
 
 ## Impact on players
 
-With no ready validator pod, the Service has no endpoints. The game should treat every answer as `unknown` and send it to the room vote: rounds still finish, but every answer needs a vote. Nothing is lost, and validation works again as soon as one pod is ready.
+With no ready validator pod, the Service has no endpoints. The game treats every answer as `unknown` and sends it to the room vote: rounds still finish, but every answer needs a vote. New rounds start from the category list the game pods cached or shared; a game pod with neither can't start a round until a validator pod is ready ([game runbook](game.md)). Nothing is lost, and validation works again as soon as one pod is ready.
 
 ## Diagnose (first 5 minutes)
 

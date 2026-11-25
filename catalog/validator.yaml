@@ -5,7 +5,7 @@ metadata:
   name: validator
   description: Checks game answers against the word lists in Postgres, using native/hebrew-normalize through cgo.
   labels:
-    tier: "1" # without it every answer goes to a room vote: rounds finish, but not correctly scored
+    tier: "1" # without it every answer goes to a room vote, and rounds start only from a cached category list
   links:
     - url: https://github.com/levtovhaim/rarebit/blob/main/docs/runbooks/validator.md
       title: Runbook

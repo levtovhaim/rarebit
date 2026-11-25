@@ -56,6 +56,10 @@ export interface Room {
   pending: PendingAnswer[] | null;
   lastResults: RoundResult | null;
   winners: string[] | null;
+  /** Why the room isn't moving, for the players: "waiting_for_categories", or null. */
+  notice: string | null;
+  /** Failed attempts to start the next round, for the backoff. */
+  startRetries: number;
 }
 
 export interface PublicPlayer {
@@ -84,6 +88,7 @@ export interface RoomSnapshot {
   voting: Array<{ playerId: string; nickname: string; answer: string }> | null;
   lastResults: RoundResult | null;
   winners: string[] | null;
+  notice: string | null;
 }
 
 export function snapshot(room: Room, now: number): RoomSnapshot {
@@ -115,5 +120,6 @@ export function snapshot(room: Room, now: number): RoomSnapshot {
         : null,
     lastResults: room.lastResults,
     winners: room.winners,
+    notice: room.notice,
   };
 }

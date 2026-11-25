@@ -8,7 +8,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 |---|---|---|---|
 | `native/hebrew-normalize` | C++20 static library, C API | Normalizes answers and matches them against word-list entries ([README](../native/hebrew-normalize/README.md), ADRs 0008–0011) | built |
 | `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`: `POST /v1/validate`, HTTP/JSON ([README](../apps/validator/README.md), ADR 0013). The same binary runs the `migrate` job (schema migrations and the word-list load, ADRs 0014 and 0016) and later the `rarity` job. Image: distroless, built and smoke-tested locally (ADR 0017). | built (image not in a registry yet) |
-| `apps/game` | Node.js, TypeScript, Socket.IO | Server-authoritative rounds. All room, timer and matchmaking state is in Redis, so any pod can serve any room and finish a round another pod started ([README](../apps/game/README.md), ADRs 0019 and 0020). | built (no image yet) |
+| `apps/game` | Node.js, TypeScript, Socket.IO | Server-authoritative rounds. All room, timer and matchmaking state is in Redis, so any pod can serve any room and finish a round another pod started ([README](../apps/game/README.md), ADRs 0019–0021). | built (no image yet) |
 | `apps/web` | React, Vite | Hebrew (RTL) UI for phones, served as static files by nginx-unprivileged; supports `BASE_PATH` | planned |
 | `apps/bots` | TypeScript | Simulated players: load tests, synthetic monitoring (a full game, exit 0 or 1), chaos observation, and the test arena's personas and bot swarm | planned |
 | `apps/content-agents` | scheduled agents | The answer curator and the category creator: they propose content changes as PRs to `data/` and never write to the database | planned |
@@ -26,8 +26,8 @@ phone ──WebSocket──> game ──> validator ──> Postgres (word lists
                       └──> Redis (room state, fan-out between game pods)
 ```
 
-- **Game ↔ phones:** Socket.IO uses the WebSocket transport only. Since every pod reads room state from Redis, no sticky sessions are needed. Every pod sweeps the rooms' deadlines in Redis and advances the ones it gets a lease for, so rounds go on when a pod dies; players resume on another pod with their token (ADRs 0019, 0020).
-- **Game → validator:** at the end of a round, one call per answer, and the playable categories (`GET /v1/categories`, cached for a minute) before each round.
+- **Game ↔ phones:** Socket.IO uses the WebSocket transport only. Since every pod reads room state from Redis, no sticky sessions are needed. Every pod sweeps the rooms' deadlines in Redis and advances the ones it gets a lease for, so rounds go on when a pod dies; players resume on another pod with their token (ADRs 0019–0021).
+- **Game → validator:** at the end of a round, one call per answer, and the playable categories (`GET /v1/categories`, cached for a minute and shared between game pods through Redis) before each round.
 - **Validator:** one HTTP call per answer. It normalizes the answer once, looks for an exact key match first, then a spelling variant or a one-edit typo among a few candidates ([hebrew-normalize](../native/hebrew-normalize/README.md)), with up to four indexed Postgres queries (ADR 0015). If it can't answer (503, or no ready pod), the game sends the answer to the room vote, as it does for `unknown` answers.
 
 ## Content changes

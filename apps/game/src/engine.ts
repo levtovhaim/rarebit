@@ -1,6 +1,6 @@
 // The game itself: joining rooms, and the phase transitions the sweeper drives. Every change goes
 // through store.updateRoom, and every transition first checks that the room is still in the state
-// it read, so two pods advancing the same room can't both apply it (ADR 0019).
+// it read, so two pods advancing the same room can't both apply it (ADRs 0019, 0021).
 import { timingSafeEqual } from "node:crypto";
 import type { Config } from "./config.js";
 import { isBlocked } from "./filter/filter.js";
@@ -22,6 +22,7 @@ import {
   standings,
   voteAccepted,
   winners,
+  type CategoryInfo,
   type Player,
   type Scored,
 } from "./rules.js";
@@ -30,8 +31,10 @@ import type { ValidatorClient } from "./validator.js";
 
 /** Answers can still be landing in Redis when a round's deadline passes: wait this long. */
 export const GRACE_MS = 250;
-/** How soon to try again when the categories can't be fetched for a new round. */
-const RETRY_MS = 2000;
+/** Waiting for the categories to start a round: 2 s, 4 s, 8 s, then every 10 s. */
+const retryDelay = (retries: number) => Math.min(2000 * 2 ** retries, 10_000);
+/** How often a pod refreshes the categories it shares with the others through Redis. */
+const SHARE_CATEGORIES_MS = 60_000;
 
 export type Emit = (room: string, event: string, payload: unknown) => void;
 
@@ -52,14 +55,35 @@ export interface Joined {
   token: string;
 }
 
+export interface Resumed {
+  room: Room;
+  /** A new token: the one used to resume no longer works. */
+  token: string;
+  /** The socket that held the seat before, if any: it gets disconnected. */
+  previousConn: string | null;
+}
+
 export function createEngine(d: EngineDeps) {
   const now = d.now ?? Date.now;
   const rng = d.rng ?? Math.random;
   const c = d.config;
+  let sharedAt = -Infinity;
 
   const broadcast = (room: Room) => d.emit(room.code, "room:state", snapshot(room, now()));
   const same = (r: Room, seen: Room) => r.phase === seen.phase && r.round === seen.round && r.deadline === seen.deadline;
   const roomLog = (room: Room) => d.log.child({ room_id: room.code, round: room.round });
+  const present = (r: Room) => r.players.filter((p) => !p.left).length;
+  const connected = (r: Room) => r.players.filter((p) => !p.left && p.connected).length;
+
+  /** For work after a room change was written: a failure is logged, and the change stands. */
+  async function bestEffort(what: string, code: string, work: Promise<unknown>): Promise<void> {
+    try {
+      await work;
+    } catch (err) {
+      d.metrics.redisErrorsTotal.inc();
+      d.log.warn({ err: String(err), room_id: code }, `couldn't ${what}`);
+    }
+  }
 
   function nickname(raw: string): string {
     const nick = cleanNickname(raw);
@@ -93,14 +117,15 @@ export function createEngine(d: EngineDeps) {
       pending: null,
       lastResults: null,
       winners: null,
+      notice: null,
+      startRetries: 0,
     };
   }
 
   /** Adds a player; in a public room a taken nickname gets a number instead of an error. */
   function addPlayer(room: Room, player: Player): Room {
-    const present = room.players.filter((p) => !p.left);
-    if (present.length >= MAX_PLAYERS) throw new GameError("room_full");
-    const taken = new Set(present.map((p) => p.nickname.toLocaleLowerCase("he")));
+    if (present(room) >= MAX_PLAYERS) throw new GameError("room_full");
+    const taken = new Set(room.players.filter((p) => !p.left).map((p) => p.nickname.toLocaleLowerCase("he")));
     let nick = player.nickname;
     if (taken.has(nick.toLocaleLowerCase("he"))) {
       if (room.type === "private") throw new GameError("nickname_taken");
@@ -111,24 +136,61 @@ export function createEngine(d: EngineDeps) {
     return { ...room, players: [...room.players, { ...player, nickname: nick }] };
   }
 
-  async function withToken(room: Room, player: Player): Promise<Joined> {
-    const t = token();
-    await d.store.setToken(room.code, player.id, tokenHash(t));
+  /**
+   * A public room before its first round: the countdown runs while enough players are connected
+   * (it starts at once with a full room), and stops when too few are.
+   */
+  function quickplayPhase(r: Room): Room {
+    if (r.type !== "public" || r.round !== 0) return r;
+    const enough = connected(r) >= c.QUICKPLAY_MIN_PLAYERS;
+    if (r.phase === "lobby" && enough) {
+      const full = present(r) >= MAX_PLAYERS;
+      return { ...r, phase: "countdown", deadline: now() + (full ? 0 : c.QUICKPLAY_COUNTDOWN_SECONDS * 1000) };
+    }
+    if (r.phase === "countdown" && !enough) return { ...r, phase: "lobby", deadline: null };
+    return r;
+  }
+
+  function joined(room: Room, player: Player, t: string): Joined {
     return { room, player: room.players.find((p) => p.id === player.id) ?? player, token: t };
+  }
+
+  /** The validator's categories, or, while it's down, the last list any pod got. */
+  async function categories(): Promise<CategoryInfo[]> {
+    try {
+      const list = await d.validator.categories();
+      if (now() - sharedAt > SHARE_CATEGORIES_MS) {
+        sharedAt = now();
+        void bestEffort("share the categories", "", d.store.setSharedCategories(list));
+      }
+      return list;
+    } catch (err) {
+      const shared = await d.store.sharedCategories().catch(() => null);
+      if (shared && shared.length > 0) {
+        d.log.warn({ err: String(err) }, "categories unavailable, using the list another pod shared");
+        return shared;
+      }
+      throw err;
+    }
   }
 
   const engine = {
     async createPrivate(rawNickname: string, conn: string): Promise<Joined> {
       const player = newPlayer(nickname(rawNickname), conn);
+      const t = token();
       for (let attempt = 0; attempt < 5; attempt++) {
         const room = newRoom(roomCode(), "private", player);
-        if (await d.store.createRoom(room)) return withToken(room, player);
+        if (await d.store.createRoom(room, player.id, tokenHash(t))) return joined(room, player, t);
       }
       throw new GameError("busy");
     },
 
     async joinPrivate(code: string, rawNickname: string, conn: string): Promise<Joined> {
       const player = newPlayer(nickname(rawNickname), conn);
+      const t = token();
+      // The token first: a player in the room always has one. A join that fails later leaves an
+      // unused entry, which expires with the room.
+      if (!(await d.store.setToken(code, player.id, tokenHash(t)))) throw new GameError("not_found");
       const room = await d.store.updateRoom(code, (r) => {
         if (r.type !== "private") throw new GameError("not_found");
         if (r.phase !== "lobby") throw new GameError("already_started");
@@ -136,69 +198,71 @@ export function createEngine(d: EngineDeps) {
       });
       if (!room) throw new GameError("not_found");
       broadcast(room);
-      return withToken(room, player);
+      return joined(room, player, t);
     },
 
-    /** Joins the open public room, or opens a new one. It starts at 8 players, or after a countdown from QUICKPLAY_MIN_PLAYERS. */
+    /** Joins the open public room, or opens a new one. It starts at 8 players, or after a countdown from QUICKPLAY_MIN_PLAYERS connected. */
     async joinQuickplay(rawNickname: string, conn: string): Promise<Joined> {
       const nick = nickname(rawNickname);
       for (let attempt = 0; attempt < 8; attempt++) {
         const open = await d.store.openQuickplayRoom();
         const player = newPlayer(nick, conn);
-        if (open) {
+        const t = token();
+        if (open && (await d.store.setToken(open, player.id, tokenHash(t)))) {
           let room: Room | null = null;
           try {
             room = await d.store.updateRoom(open, (r) => {
-              if (r.type !== "public" || (r.phase !== "lobby" && r.phase !== "countdown")) throw new GameError("closed");
-              const next = addPlayer(r, player);
-              const count = next.players.filter((p) => !p.left).length;
-              if (count >= MAX_PLAYERS) return { ...next, phase: "countdown", deadline: now() };
-              if (next.phase === "lobby" && count >= c.QUICKPLAY_MIN_PLAYERS) {
-                return { ...next, phase: "countdown", deadline: now() + c.QUICKPLAY_COUNTDOWN_SECONDS * 1000 };
-              }
-              return next;
+              if (r.type !== "public" || r.round !== 0 || (r.phase !== "lobby" && r.phase !== "countdown")) throw new GameError("closed");
+              return quickplayPhase(addPlayer(r, player));
             });
           } catch (err) {
             if (!(err instanceof GameError) || (err.code !== "closed" && err.code !== "room_full")) throw err;
           }
           if (room) {
-            if (room.players.filter((p) => !p.left).length >= MAX_PLAYERS) await d.store.closeQuickplay(open);
+            if (present(room) >= MAX_PLAYERS) await bestEffort("close quick play", open, d.store.closeQuickplay(open));
+            else await bestEffort("keep quick play open", open, d.store.touchOpenQuickplay(open));
             broadcast(room);
-            return withToken(room, player);
+            return joined(room, player, t);
           }
         }
         const fresh = newRoom(roomCode(), "public", player);
-        if (!(await d.store.createRoom(fresh))) continue;
+        if (!(await d.store.createRoom(fresh, player.id, tokenHash(t)))) continue;
         if (!(await d.store.claimOpenQuickplay(open ?? "", fresh.code))) {
           await d.store.deleteRoom(fresh.code); // another pod opened a room first: join that one
           continue;
         }
-        return withToken(fresh, player);
+        return joined(fresh, player, t);
       }
       throw new GameError("busy");
     },
 
     /** Reconnects a player to their room (after a dropped connection or a pod going away). */
-    async resume(code: string, id: string, rawToken: string, conn: string): Promise<Room> {
+    async resume(code: string, id: string, rawToken: string, conn: string): Promise<Resumed> {
       const stored = await d.store.tokenHash(code, id);
       const given = tokenHash(rawToken);
       if (!stored || stored.length !== given.length || !timingSafeEqual(Buffer.from(stored), Buffer.from(given))) {
         throw new GameError("bad_token");
       }
-      const room = await d.store.updateRoom(code, (r) =>
-        r.players.some((p) => p.id === id)
-          ? { ...r, players: r.players.map((p) => (p.id === id ? { ...p, connected: true, conn } : p)) }
-          : null,
-      );
+      let previousConn: string | null = null;
+      const room = await d.store.updateRoom(code, (r) => {
+        const p = r.players.find((x) => x.id === id);
+        if (!p || p.left) throw new GameError("not_found");
+        previousConn = p.conn && p.conn !== conn ? p.conn : null;
+        return quickplayPhase({ ...r, players: r.players.map((x) => (x.id === id ? { ...x, connected: true, conn } : x)) });
+      });
       if (!room) throw new GameError("not_found");
+      // A new token after the room change: if this write fails, the client gets an error and its
+      // old token still works for the retry.
+      const t = token();
+      if (!(await d.store.setToken(code, id, tokenHash(t)))) throw new GameError("not_found");
       broadcast(room);
-      return room;
+      return { room, token: t, previousConn };
     },
 
     async disconnected(code: string, id: string, conn: string): Promise<void> {
       const room = await d.store.updateRoom(code, (r) =>
         r.players.some((p) => p.id === id && p.conn === conn)
-          ? { ...r, players: r.players.map((p) => (p.id === id ? { ...p, connected: false, conn: null } : p)) }
+          ? quickplayPhase({ ...r, players: r.players.map((p) => (p.id === id ? { ...p, connected: false, conn: null } : p)) })
           : null, // a newer connection already took over
       );
       if (room) broadcast(room);
@@ -209,31 +273,22 @@ export function createEngine(d: EngineDeps) {
         if (r.type !== "private") throw new GameError("not_allowed");
         if (r.hostId !== id) throw new GameError("not_host");
         if (r.phase !== "lobby") throw new GameError("already_started");
-        if (r.players.filter((p) => !p.left).length < MIN_PRIVATE_PLAYERS) throw new GameError("not_enough_players");
+        if (present(r) < MIN_PRIVATE_PLAYERS) throw new GameError("not_enough_players");
         return { ...r, phase: "countdown", deadline: now() }; // the sweeper starts round 1 right away
       });
       if (!room) throw new GameError("not_found");
       broadcast(room);
     },
 
+    /** Checked and stored in one Redis step, against Redis's clock (store.ts). */
     async answer(code: string, id: string, round: number, raw: string): Promise<void> {
-      const room = await d.store.getRoom(code);
-      if (!room) throw new GameError("not_found");
-      if (room.phase !== "round" || room.round !== round) throw new GameError("not_accepting");
-      if (room.deadline === null || now() > room.deadline) throw new GameError("too_late");
-      const p = room.players.find((x) => x.id === id);
-      if (!p || !isActive(p)) throw new GameError("not_playing");
-      await d.store.setAnswer(code, round, id, cleanAnswer(raw));
+      const result = await d.store.acceptAnswer(code, round, id, cleanAnswer(raw));
+      if (result !== "ok") throw new GameError(result);
     },
 
     async vote(code: string, voterId: string, round: number, ownerId: string, accept: boolean): Promise<void> {
-      const room = await d.store.getRoom(code);
-      if (!room) throw new GameError("not_found");
-      if (room.phase !== "voting" || room.round !== round) throw new GameError("not_voting");
-      const voter = room.players.find((p) => p.id === voterId);
-      if (!voter || voter.left || voterId === ownerId) throw new GameError("not_allowed");
-      if (!room.pending?.some((a) => a.playerId === ownerId && a.verdict === "unknown")) throw new GameError("not_found");
-      await d.store.setVote(code, round, ownerId, voterId, accept);
+      const result = await d.store.acceptVote(code, round, voterId, ownerId, accept);
+      if (result !== "ok") throw new GameError(result);
     },
 
     async leave(code: string, id: string): Promise<void> {
@@ -245,10 +300,7 @@ export function createEngine(d: EngineDeps) {
         if (r.round === 0) {
           // Not started: the player is simply gone, and the host role moves on.
           const players = r.players.filter((x) => x.id !== id);
-          next = { ...r, players, hostId: r.hostId === id ? (players[0]?.id ?? null) : r.hostId };
-          if (next.type === "public" && next.phase === "countdown" && players.length < c.QUICKPLAY_MIN_PLAYERS) {
-            next = { ...next, phase: "lobby", deadline: null };
-          }
+          next = quickplayPhase({ ...r, players, hostId: r.hostId === id ? (players[0]?.id ?? null) : r.hostId });
         } else {
           // In a game: out of it, keeping their points.
           next = { ...r, players: r.players.map((x) => (x.id === id ? { ...x, left: true, connected: false, conn: null } : x)) };
@@ -258,9 +310,13 @@ export function createEngine(d: EngineDeps) {
       });
       if (!room) return;
       if (empty) {
-        await d.store.deleteRoom(code);
-        if (room.type === "public") await d.store.closeQuickplay(code);
+        await bestEffort("delete an empty room", code, d.store.deleteRoom(code));
+        if (room.type === "public") await bestEffort("close quick play", code, d.store.closeQuickplay(code));
         return;
+      }
+      if (room.type === "public" && room.round === 0) {
+        // A seat came free: send quick play here again, unless another room is open by now.
+        await bestEffort("reopen quick play", code, d.store.claimOpenQuickplay("", code));
       }
       broadcast(room);
     },
@@ -293,12 +349,17 @@ export function createEngine(d: EngineDeps) {
   async function startRound(seen: Room): Promise<void> {
     let pick: ReturnType<typeof pickRound> = null;
     try {
-      pick = pickRound(await d.validator.categories(), new Set(seen.used), rng);
+      pick = pickRound(await categories(), new Set(seen.used), rng);
     } catch (err) {
-      roomLog(seen).warn({ err: String(err) }, "no categories from the validator; trying again");
+      roomLog(seen).warn({ err: String(err), retries: seen.startRetries }, "no categories from the validator; trying again");
     }
     if (!pick) {
-      await d.store.updateRoom(seen.code, (r) => (same(r, seen) ? { ...r, deadline: now() + RETRY_MS } : null));
+      const waiting = await d.store.updateRoom(seen.code, (r) =>
+        same(r, seen)
+          ? { ...r, deadline: now() + retryDelay(r.startRetries), startRetries: r.startRetries + 1, notice: "waiting_for_categories" }
+          : null,
+      );
+      if (waiting) broadcast(waiting);
       return;
     }
     const { category, letter } = pick;
@@ -315,12 +376,14 @@ export function createEngine(d: EngineDeps) {
             used: [...r.used, `${category.id}:${letter}`],
             startedAt: r.startedAt ?? now(),
             pending: null,
+            notice: null,
+            startRetries: 0,
           }
         : null,
     );
     if (!room) return;
     if (room.round === 1 && room.type === "public") {
-      await d.store.closeQuickplay(room.code);
+      await bestEffort("close quick play", room.code, d.store.closeQuickplay(room.code));
       for (const p of room.players) d.metrics.matchmakingWaitSeconds.observe((now() - p.joinedAt) / 1000);
     }
     d.emit(room.code, "round:start", { round: room.round, letter, category: room.category, deadline, serverNow: now() });
@@ -336,10 +399,8 @@ export function createEngine(d: EngineDeps) {
         const answer = cleanAnswer(answers.get(p.id) ?? "");
         const base = { playerId: p.id, nickname: p.nickname, answer };
         if (answer === "") return { ...base, verdict: "empty", key: "" };
-        if (isBlocked(answer, "answer")) {
-          d.metrics.filterBlockedTotal.inc({ field: "answer" });
-          return { ...base, verdict: "blocked", key: "" };
-        }
+        // A blocked answer's text never reaches the other players, the results or the stream.
+        if (isBlocked(answer, "answer")) return { ...base, answer: "", verdict: "blocked", key: "" };
         const check = await d.validator.validate(category.id, letter, answer);
         // Without the validator's key, group identical answers by the filter's coarser form.
         const key = check.key || `~${filterCompact(answer)}`;
@@ -401,13 +462,18 @@ export function createEngine(d: EngineDeps) {
     });
     if (!room) return;
 
+    // Counted once, after the round's result is written.
     d.metrics.roundsTotal.inc();
     for (const s of scored) {
       const label = s.verdict === "unknown" ? (s.accepted ? "accepted" : "rejected") : s.verdict;
       d.metrics.answersTotal.inc({ result: label });
+      if (s.verdict === "blocked") d.metrics.filterBlockedTotal.inc({ field: "answer" });
     }
-    try {
-      await d.store.appendAnswers(
+    // The game goes on without its analytics record.
+    await bestEffort(
+      "append answers to the stream",
+      room.code,
+      d.store.appendAnswers(
         scored.map((s) => ({
           room: room.code,
           room_type: room.type,
@@ -420,12 +486,8 @@ export function createEngine(d: EngineDeps) {
           points: String(s.points),
           at: new Date(now()).toISOString(),
         })),
-      );
-    } catch (err) {
-      // The game goes on without its analytics record.
-      d.metrics.redisErrorsTotal.inc();
-      roomLog(room).warn({ err: String(err) }, "couldn't append answers to the stream");
-    }
+      ),
+    );
     const table = standings(room.players).map(({ id, nickname, score, strikes, eliminated }) => ({ id, nickname, score, strikes, eliminated }));
     d.emit(room.code, "round:results", { ...result, standings: table, serverNow: now() });
     if (over) {

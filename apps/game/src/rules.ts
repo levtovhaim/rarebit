@@ -134,12 +134,16 @@ export function pickRound(
   return { category: choice.c, letter };
 }
 
-/** A nickname: 2 to 16 letters, digits, spaces, hyphens, underscores or apostrophes. */
+/**
+ * A nickname: 2 to 16 Hebrew or Latin letters, digits, spaces, hyphens, underscores or
+ * apostrophes. Only the scripts the offensive-word filter reads: a Cyrillic or Greek look-alike
+ * letter would pass it unseen.
+ */
 export function cleanNickname(raw: string): string | null {
   const nick = raw.normalize("NFC").trim().replace(/\s+/g, " ");
   const length = [...nick].length;
   if (length < 2 || length > 16) return null;
-  if (!/^[\p{L}\p{N} _'-]+$/u.test(nick)) return null;
+  if (!/^[א-תA-Za-z0-9 _'-]+$/.test(nick)) return null;
   return nick;
 }
 

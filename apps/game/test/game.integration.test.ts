@@ -7,6 +7,16 @@ import { call, client, next, REDIS_URL, startPod, testConfig, type Pod } from ".
 
 // Tests in a file run one after another, which these need: they share one Redis.
 const run = REDIS_URL ? describe : describe.skip;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+
+/** Waits for `check` to hold, for up to 3 s. */
+async function until(check: () => Promise<boolean>): Promise<void> {
+  for (let i = 0; i < 30; i++) {
+    if (await check()) return;
+    await sleep(100);
+  }
+  throw new Error("condition not met within 3 s");
+}
 
 run("the game against Redis", { timeout: 60_000 }, () => {
   const redis = createClient({ url: REDIS_URL, RESP: 2 });
@@ -89,7 +99,7 @@ run("the game against Redis", { timeout: 60_000 }, () => {
     expect(first?.message).toMatchObject({ room: created.roomCode, round: "1", category: "country", letter: "א" });
   });
 
-  it("keeps the game going when the pod that was running it goes away", async () => {
+  it("keeps the game going when the pod that was running it shuts down", async () => {
     const [a, b] = [await pod("a"), await pod("b")];
     const { host, guest, created, joined } = await privateRoom(a, a);
     const started = next(host, "round:start");
@@ -181,6 +191,150 @@ run("the game against Redis", { timeout: 60_000 }, () => {
       });
     expect(await open("https://evil.example")).toBe(false);
     expect(await open("https://rarebit.example")).toBe(true);
+  });
+
+  /** A private room on one pod, started; resolves with round 1's round:start. */
+  async function startedRoom(p: Pod) {
+    const room = await privateRoom(p, p);
+    const started = next(room.host, "round:start");
+    expect((await call(room.host, "game:start")).ok).toBe(true);
+    return { ...room, r1: await started };
+  }
+
+  it("isn't stopped by leftover deadline entries, and removes them", async () => {
+    // More than one sweep's batch (20) of entries whose rooms are gone, all due long ago.
+    const orphans = Array.from({ length: 25 }, (_, i) => ({ score: 1000 + i, value: `GONE${String(i).padStart(2, "0")}` }));
+    await redis.zAdd("rb:deadlines", orphans);
+    const a = await pod("a");
+    const { r1 } = await startedRoom(a);
+    expect(r1.round).toBe(1);
+    expect(await redis.zScore("rb:deadlines", "GONE00")).toBeNull();
+    await until(async () => (await redis.zCard("rb:deadlines")) === 1); // only the running room's
+  });
+
+  it("finishes the round when Redis drops every connection mid-game", async () => {
+    const a = await pod("a");
+    const { host, guest } = await startedRoom(a);
+    await call(host, "answer:submit", { round: 1, answer: "אוסטריה" });
+    await redis.sendCommand(["CLIENT", "KILL", "TYPE", "normal", "SKIPME", "yes"]);
+    await redis.sendCommand(["CLIENT", "KILL", "TYPE", "pubsub", "SKIPME", "yes"]);
+    const results = await next(guest, "round:results");
+    expect(results.answers.find((x: any) => x.verdict === "valid")?.points).toBe(10);
+    expect((await fetch(`http://127.0.0.1:${a.port}/readyz`)).status).toBe(200);
+  });
+
+  it("survives failed broadcasts while its publishing connection reconnects", async () => {
+    const a = await pod("a");
+    const { host } = await privateRoom(a, a);
+    const pubId = (await redis.sendCommand(["CLIENT", "LIST"]))
+      .toString()
+      .split("\n")
+      .find((line) => line.includes("name=rarebit-game:a:pub"))
+      ?.match(/^id=(\d+)/)?.[1];
+    expect(pubId).toBeDefined();
+    // Redis refuses new connections (as during a failover), so the killed one can't come back yet.
+    const maxClients = (await redis.configGet("maxclients")).maxclients ?? "10000";
+    await redis.configSet("maxclients", "1");
+    try {
+      await redis.sendCommand(["CLIENT", "KILL", "ID", pubId!]);
+      // Broadcasts now go out while the publishing connection is down; this pod's players still get them.
+      const started = next(host, "round:start");
+      expect((await call(host, "game:start")).ok).toBe(true);
+      await started;
+      expect((await fetch(`http://127.0.0.1:${a.port}/readyz`)).status).toBe(503);
+    } finally {
+      await redis.configSet("maxclients", maxClients);
+    }
+    await until(async () => (await fetch(`http://127.0.0.1:${a.port}/readyz`)).status === 200);
+    const metrics = await (await fetch(`http://127.0.0.1:${a.port}/metrics`)).text();
+    expect(metrics).toMatch(/game_redis_errors_total [1-9]/);
+  });
+
+  it("takes an answer until the deadline, by Redis's clock, and not after", async () => {
+    const a = await pod("a");
+    const { host, guest, created, r1 } = await startedRoom(a);
+    // Deadlines are on the server's clock (Redis's); this process's clock can differ.
+    const serverNow = (() => {
+      const offset = r1.serverNow - Date.now();
+      return () => Date.now() + offset;
+    })();
+    await sleep(r1.deadline - serverNow() - 300);
+    expect((await call(host, "answer:submit", { round: 1, answer: "אוסטריה" })).ok).toBe(true);
+    await sleep(r1.deadline - serverNow() + 60); // past the deadline, before the sweeper's grace ends
+    expect((await call(guest, "answer:submit", { round: 1, answer: "ארגנטינה" })).error).toBe("too_late");
+    const results = await next(host, "round:results");
+    expect(results.answers.find((x: any) => x.playerId === created.playerId).points).toBe(10);
+    expect(results.answers.find((x: any) => x.playerId !== created.playerId).verdict).toBe("empty");
+  });
+
+  it("never shows a blocked answer's text", async () => {
+    const a = await pod("a");
+    const { host, guest, created } = await startedRoom(a);
+    await call(host, "answer:submit", { round: 1, answer: "fuck" });
+    await call(guest, "answer:submit", { round: 1, answer: "אוסטריה" });
+    const results = await next(guest, "round:results");
+    expect(results.answers.find((x: any) => x.playerId === created.playerId)).toMatchObject({ answer: "", verdict: "blocked", points: 0 });
+    const state = (await call(guest, "room:sync")).state;
+    expect(JSON.stringify(state)).not.toContain("fuck");
+    const stream = await redis.xRange("rb:answers", "-", "+");
+    expect(JSON.stringify(stream)).not.toContain("fuck");
+    const metrics = await (await fetch(`http://127.0.0.1:${a.port}/metrics`)).text();
+    expect(metrics).toContain('game_filter_blocked_total{field="answer"} 1');
+  });
+
+  it("gives a socket one seat: joining another room leaves the first", async () => {
+    const a = await pod("a");
+    const { host, guest, joined } = await privateRoom(a, a);
+    const left = next(host, "room:state", (s) => s.players.length === 1);
+    expect((await call(guest, "room:create", { nickname: "רותי" })).ok).toBe(true);
+    const state = await left;
+    expect(state.players.map((p: any) => p.id)).not.toContain(joined.playerId);
+  });
+
+  it("gives a new token on resume, and closes the connection that held the seat", async () => {
+    const [a, b] = [await pod("a"), await pod("b")];
+    const { host, created } = await privateRoom(a, a);
+    const closed = new Promise((resolve) => host.once("disconnect", resolve));
+    const tab = await player(b);
+    const resumed = await call(tab, "room:resume", { roomCode: created.roomCode, playerId: created.playerId, token: created.token });
+    expect(resumed.ok).toBe(true);
+    expect(resumed.token).not.toBe(created.token);
+    await closed; // the old socket, on the other pod
+    const again = await player(b);
+    expect((await call(again, "room:resume", { roomCode: created.roomCode, playerId: created.playerId, token: created.token })).error).toBe("bad_token");
+    expect((await call(again, "room:resume", { roomCode: created.roomCode, playerId: created.playerId, token: resumed.token })).ok).toBe(true);
+  });
+
+  it("closes a socket that keeps guessing room codes", async () => {
+    const a = await pod("a");
+    const s = await player(a);
+    const closed = new Promise((resolve) => s.once("disconnect", resolve));
+    for (let i = 0; i < 5; i++) expect((await call(s, "room:join", { roomCode: "ABCDEF", nickname: "דני" })).error).toBe("not_found");
+    await closed;
+  });
+
+  it("limits the connections from one address", async () => {
+    const a = await pod("a", testConfig({ MAX_CONNECTIONS_PER_IP: "2" }));
+    const first = await player(a);
+    await player(a);
+    await expect(player(a)).rejects.toThrow("too_many_connections");
+    first.disconnect();
+    await sleep(100);
+    expect((await player(a)).connected).toBe(true);
+  });
+
+  it("expires a lobby sooner than a game", async () => {
+    const a = await pod("a", testConfig({ LOBBY_TTL_SECONDS: "60" }));
+    const { host, created } = await privateRoom(a, a);
+    const key = `rb:room:${created.roomCode}`;
+    const lobby = await redis.pTTL(key);
+    expect(lobby).toBeGreaterThan(0);
+    expect(lobby).toBeLessThanOrEqual(60_000);
+    expect(await redis.pTTL(`${key}:t`)).toBeGreaterThan(0);
+    const started = next(host, "round:start");
+    await call(host, "game:start");
+    await started;
+    expect(await redis.pTTL(key)).toBeGreaterThan(60_000);
   });
 
   it("refuses offensive nicknames and exposes the game metrics", async () => {

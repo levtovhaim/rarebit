@@ -55,7 +55,7 @@ game-integration: ## Run the game's Redis tests (several servers as pods) agains
 	docker run -d --name "$$name" -p 127.0.0.1::6379 $(REDIS_IMAGE) >/dev/null; \
 	for _ in $$(seq 30); do docker exec "$$name" redis-cli ping 2>/dev/null | grep -q PONG && break; sleep 0.5; done; \
 	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
-	cd apps/game && TEST_REDIS_URL="redis://127.0.0.1:$$port" npx vitest run test/game.integration.test.ts
+	cd apps/game && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm run test:integration
 
 VALIDATOR_IMAGE ?= rarebit-validator:dev
 
