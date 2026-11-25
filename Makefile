@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration up smoke down kind-up kind-down
+.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -56,6 +56,15 @@ game-integration: ## Run the game's Redis tests (several servers as pods) agains
 	for _ in $$(seq 30); do docker exec "$$name" redis-cli ping 2>/dev/null | grep -q PONG && break; sleep 0.5; done; \
 	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
 	cd apps/game && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm run test:integration
+
+GAME_IMAGE ?= rarebit-game:dev
+
+game-image: ## Build the game image (apps/game/Dockerfile; the context is the repo root)
+	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	docker build -f apps/game/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(GAME_IMAGE)" .
+
+game-image-smoke: game-image ## Run the game image non-root and read-only against a throwaway Redis (needs make game first)
+	bash apps/game/test/image-smoke.sh "$(GAME_IMAGE)" "$(REDIS_IMAGE)"
 
 VALIDATOR_IMAGE ?= rarebit-validator:dev
 

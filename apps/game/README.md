@@ -150,6 +150,8 @@ The pod's `terminationGracePeriodSeconds` must exceed `DRAIN_DELAY_SECONDS + 1 +
 ```bash
 make game              # npm ci (scripts disabled), tsc type check, unit tests, build to dist/
 make game-integration  # the Redis tests, against a throwaway redis:8.10.3-alpine container (Docker)
+make game-image        # the container image (apps/game/Dockerfile), tagged rarebit-game:dev
+make game-image-smoke  # the image, non-root and read-only, against a throwaway Redis (needs make game first)
 ```
 
 The unit tests cover:
@@ -176,4 +178,23 @@ The Redis tests run game servers in one process as pods:
 
 The cross-pod test fails without the Redis adapter (checked).
 
-Run it locally: `npm run build && REDIS_URL=redis://127.0.0.1:6379 VALIDATOR_URL=http://127.0.0.1:8080 ALLOWED_ORIGINS='*' npm start` in `apps/game`. A docker compose stack (`make up`) isn't implemented yet.
+The image smoke test checks the image's contract (below), then, against a throwaway Redis: a bad config exits 1 without printing values; `/readyz`, `/healthz`, `/version` (matching the image's revision label) and `/metrics`; a room created and read back over Socket.IO (`test/smoke-client.ts`); `check-ready` inside the container; one process, `node` itself; and a SIGTERM drain that exits 0.
+
+Run it locally: `npm run build && REDIS_URL=redis://127.0.0.1:6379 VALIDATOR_URL=http://127.0.0.1:8080 ALLOWED_ORIGINS='*' npm start` in `apps/game`, or the image (`make game-image`) with the same variables. A docker compose stack (`make up`) isn't implemented yet.
+
+## Image
+
+[`Dockerfile`](Dockerfile) ([ADR 0022](../../docs/adr/0022-game-image-distroless-nodejs.md)): built on `node:26.13.1-trixie-slim` (`npm ci`, `tsc`, `npm prune --omit=dev`), run on `gcr.io/distroless/nodejs26-debian13:nonroot`. Both are pinned by digest. The build context is the repo root, limited to the six paths in [`Dockerfile.dockerignore`](Dockerfile.dockerignore).
+
+The contract, checked by `make game-image-smoke`:
+- user `65532:65532` (numeric), a read-only root filesystem, no capabilities needed; no shell, no npm;
+- `ENTRYPOINT ["/nodejs/bin/node", "/app/dist/main.js"]`: Node is PID 1 and gets SIGTERM itself. Kubernetes `args:` are passed to the server; replacing it takes `command:`;
+- `/version` reports the `GIT_SHA` build arg (`make game-image` passes the commit, with `-dirty` for uncommitted changes);
+- the built server and its production dependencies only; nothing world-writable, setuid or setgid;
+- at most 230 MB unpacked (it's about 201 MB, 150 MB of which is the Node binary).
+
+Settings the deployment must get right:
+- **Probes:** `httpGet` on `/healthz` (liveness) and `/readyz` (readiness). The image has no shell, so `exec` probes and `preStop` hooks that run a shell can't work.
+- **Command health checks** (docker compose): `["/nodejs/bin/node", "/app/dist/check-ready.js"]`, which exits 0 when `/readyz` answers 200 within 2 s.
+- **`terminationGracePeriodSeconds`:** more than `DRAIN_DELAY_SECONDS + 1 + SHUTDOWN_TIMEOUT_SECONDS` (Shutdown, above).
+- **Stack traces in source:** the logs carry error messages, not stacks. To map Node's own stack traces back to the TypeScript, set `NODE_OPTIONS=--enable-source-maps`; the source maps are in the image.
