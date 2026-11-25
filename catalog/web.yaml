@@ -1,0 +1,22 @@
+# Service catalog entry (catalog/README.md).
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: web
+  description: The web UI. The game on a phone, in Hebrew, served as static files.
+  labels:
+    tier: "1" # without it nobody can play
+  links:
+    - url: https://github.com/levtovhaim/rarebit/blob/main/docs/runbooks/web.md
+      title: Runbook
+    - url: https://github.com/levtovhaim/rarebit/blob/main/apps/web/README.md
+      title: README
+spec:
+  type: service
+  lifecycle: experimental
+  owner: user:haimlevtov
+  system: rarebit
+  dependsOn:
+    - component:game
+# SLOs: none yet. They come with the monitoring stack; the game's (and the synthetic game's) are
+# what players feel.
