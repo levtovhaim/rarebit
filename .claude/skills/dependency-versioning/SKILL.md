@@ -97,8 +97,15 @@ So after **every** bump, check what actually changed in the lockfile:
   node .claude/skills/dependency-versioning/scripts/age-scan.cjs HEAD apps/<app>/package-lock.json
   ```
 
-  For each `<7 DAYS` hit, pin the transitive to newest safe with `overrides` in `package.json`, or
-  drop the hub bump. Re-run until it reports **0 violations**.
+  It reads each changed version's exact publish time from the registry (`$npm_config_registry`,
+  else registry.npmjs.org), on Linux, macOS and Windows alike. For each `<7 DAYS` hit, pin the
+  transitive to newest safe with `overrides` in `package.json`, or drop the hub bump. Re-run until
+  it reports **0 violations and 0 unknown publish times** (exit 0).
+
+  It fails closed: a publish time it can't read (the registry down, a version it doesn't list, a
+  git or file dependency) prints `???` and exits 3. That is "not proven safe", never "safe": re-run,
+  or check those versions by hand with `npm view <pkg> time --json`. Exit 2 means the ref or a
+  lockfile couldn't be read.
 - **Go:** `git diff go.sum`, then check the `Time` of each changed module with `go list -m -json`.
 - **Python:** `uv lock --exclude-newer <cutoff-timestamp>` keeps the whole resolution under the
   cutoff.
@@ -156,6 +163,6 @@ npm view <pkg> time --json                                    # newest safe targ
 go list -m -json <module>@<version>                           # publish time (Go)
 docker buildx imagetools inspect <image>:<tag>                # digest to pin
 git ls-remote --tags https://github.com/<owner>/<action> '<tag>*'   # SHA to pin
-node .claude/skills/dependency-versioning/scripts/age-scan.cjs HEAD apps/<app>/package-lock.json   # 0 violations
+node .claude/skills/dependency-versioning/scripts/age-scan.cjs HEAD apps/<app>/package-lock.json   # exit 0: 0 violations, 0 unknown
 make check
 ```
