@@ -27,4 +27,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0021](0021-game-timers-swept-with-leases.md) | Run game timers from a deadline set that every pod sweeps, under per-room leases | accepted |
 | [0022](0022-game-image-distroless-nodejs.md) | Run the game image on distroless Node.js, with Node itself as PID 1 | accepted |
 | [0023](0023-bots-protocol-clients-judged-by-failed-games.md) | Build the bots as real protocol clients with a strategy hook, and judge runs by failed games | accepted |
-| [0024](0024-local-stack-with-compose-and-nginx.md) | Run the local stack with docker compose, two game replicas behind nginx | accepted |
+| [0024](0024-local-stack-with-compose-and-nginx.md) | Run the local stack with docker compose, two game replicas behind nginx | accepted; the `make smoke` bullet superseded by 0025 |
+| [0025](0025-bots-image-and-smoke-from-it.md) | Ship the bots as an image, and run `make smoke` from it | accepted |

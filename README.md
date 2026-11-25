@@ -25,7 +25,6 @@ Early setup: the game's services run together locally (`make up`, below); no pla
 With Docker running:
 
 ```bash
-make bots    # once: builds the bots that make smoke runs
 make up      # Postgres, the validator, Redis, two game servers behind nginx on 127.0.0.1:8080
 make smoke   # three bots play a full game through it
 make down    # removes it all

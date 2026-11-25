@@ -4,7 +4,7 @@ Everything the game needs, on one machine, run the way the cluster will run it (
 
 ```bash
 make up      # build both images, start the stack, wait until every service is healthy (about 40 s)
-make smoke   # three bots play a full game through nginx (make bots first)
+make smoke   # the bots image: three bots play a full game through nginx
 make down    # stop and remove the containers, the network and the database
 ```
 
@@ -22,13 +22,14 @@ phone/bots ──> nginx 127.0.0.1:8080 ──> game-1 ─┐
 | `redis` | `redis:8.10.3-alpine` | `redis-cli ping` | - |
 | `game-1`, `game-2` | `rarebit-game:dev` | `dist/check-ready.js` (its `/readyz`) | redis healthy |
 | `nginx` | `nginx-unprivileged:1.31.7` | `wget` on its own `/healthz` | both game replicas started |
+| `bots` | `rarebit-bots:dev` | (not started by `make up`: the `tools` profile; `make smoke` runs it) | - |
 
 Why those conditions:
 - **`migrate` must finish, not just start:** before it does, the validator has no schema and no word lists, and its readiness fails.
 - **The game waits only for Redis**, its one hard dependency. It doesn't wait for the validator: without categories, rounds wait and retry, as they would in the cluster, where nothing orders startup.
 - **nginx waits for the replicas to start, not to be healthy:** it routes around one that's down, so a broken replica doesn't keep the entry point closed.
 
-`make up` uses `docker compose up --wait`, which returns once every healthcheck passes, so a `make smoke` right after it finds a ready stack.
+`make up` uses `docker compose up --wait`, which returns once every healthcheck passes, so a `make smoke` right after it finds a ready stack. `make smoke` builds the bots image and runs `docker compose run --rm bots synthetic`: the bots reach the game through nginx (`BOTS_URL=http://nginx:8080`), like any player ([ADR 0025](../docs/adr/0025-bots-image-and-smoke-from-it.md)).
 
 ## How it runs
 
@@ -45,12 +46,12 @@ Why those conditions:
 Both run against this stack with the bots' chaos observer:
 
 ```bash
-node apps/bots/dist/main.js observe --url http://127.0.0.1:8080 --origin http://localhost:8080 --rooms 3 --duration 1 &
+docker compose -f compose/compose.yaml run --rm bots observe --rooms 3 --duration 1 &
 sleep 12; docker kill rarebit-game-1-1                    # or: docker compose -f compose/compose.yaml stop game-2
 wait
 ```
 
-Last run (2026-11-25):
+Last runs (2026-11-25; the second kill drill with the bots image as the observer: 3/3 games, 5 resumes):
 
 | Drill | Games | Result |
 |---|---|---|
