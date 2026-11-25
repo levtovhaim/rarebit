@@ -21,7 +21,8 @@ suggestion at most.
    Terraform providers and modules and Helm charts by exact version.
 4. **Runtime contract.** `/healthz` (liveness), `/readyz` (readiness, false while draining),
    `/metrics` (Prometheus), `/version` (git SHA); JSON logs to stdout; config from env vars,
-   validated at startup; graceful drain on SIGTERM; non-root with a read-only root filesystem.
+   validated at startup; graceful drain on the image's stop signal (SIGTERM, or SIGQUIT for
+   nginx); non-root with a read-only root filesystem.
 5. **Names, tags and labels.** Image tags `pr-<number>-<sha7>` and `main-<sha7>`; Kubernetes labels
    `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner` and `tier`.
 6. **Terraform layout.** Each module has `README.md` (terraform-docs), `examples/basic` (runs with

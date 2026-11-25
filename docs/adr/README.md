@@ -31,4 +31,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0025](0025-bots-image-and-smoke-from-it.md) | Ship the bots as an image, and run `make smoke` from it | accepted |
 | [0026](0026-web-ui-static-bundle-from-the-snapshot.md) | Build the web UI as one static bundle that renders from the room snapshot | accepted |
 | [0027](0027-web-image-nginx-any-path.md) | Serve the web UI from its own nginx-unprivileged image, under any path prefix | accepted |
-| [0028](0028-web-caching-and-security-headers.md) | Cache hashed assets for a year, revalidate the page, and send a strict CSP | accepted |
+| [0028](0028-web-caching.md) | Cache the web UI's hashed assets for a year, and revalidate the page on every load | accepted |
+| [0029](0029-web-security-headers.md) | Send a strict Content-Security-Policy and security headers on every web response | accepted |

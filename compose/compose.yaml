@@ -135,6 +135,9 @@ services:
     image: rarebit-web:dev
     pull_policy: never
     tmpfs: [/tmp]
+    # More than nginx's worker_shutdown_timeout (10 s): the graceful stop (SIGQUIT, the image's
+    # stop signal) finishes the downloads in flight.
+    stop_grace_period: 15s
     restart: unless-stopped
     # Healthy = /readyz is 200, with the base image's BusyBox wget.
     healthcheck:

@@ -125,7 +125,9 @@ up: validator-image game-image web-image ## Start the local stack (compose/compo
 	$(COMPOSE) up -d --wait --wait-timeout 180
 	@echo "up: http://127.0.0.1:$(RAREBIT_PORT) (make smoke plays a game through it; make down removes it all)"
 
-smoke: bots-image ## Bots play a full game through nginx against the running stack (make up first)
+smoke: bots-image ## The web UI answers at /, then bots play a full game through nginx (make up first)
+	curl -fsS --max-time 5 "http://127.0.0.1:$(RAREBIT_PORT)/" | grep -q 'id="root"' || \
+		{ echo "smoke: no web UI at http://127.0.0.1:$(RAREBIT_PORT)/" >&2; exit 1; }
 	$(COMPOSE) run --rm bots synthetic --timeout 300
 
 down: ## Stop the local stack and remove its containers, network and data

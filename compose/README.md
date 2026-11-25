@@ -44,7 +44,7 @@ Why those conditions:
 - **Data:** the database lives in an anonymous volume and Redis in memory; `make down` removes both.
 - **Shorter games** than the server's defaults: 15 s rounds, 3 rounds, a 5 s quick-play countdown. Override them with `RAREBIT_ROUND_SECONDS`, `RAREBIT_MAX_ROUNDS` and `RAREBIT_COUNTDOWN_SECONDS`, and the port with `RAREBIT_PORT`.
 - **Origins:** the game accepts WebSockets from `http://localhost:8080` and `http://127.0.0.1:8080` (the web UI through nginx; `make smoke` sends the first), and from `http://localhost:5173`, where `npm run dev` serves the web UI and proxies `/socket.io` to nginx ([apps/web](../apps/web/README.md)).
-- **Like the load balancer:** nginx appends the client's address to `X-Forwarded-For` on every request, so the web container's `/metrics` answers only direct requests, and `http://127.0.0.1:8080/metrics` is 404.
+- **Like the load balancer:** nginx appends the client's address to `X-Forwarded-For` on every request, and routes only the web UI's port: the web container's `/metrics` is on port 9113, which nothing publishes, so `http://127.0.0.1:8080/metrics` is 404.
 
 ## Drills
 

@@ -49,7 +49,8 @@ For small scopes, check directly, in this order.
   version in extended support
 - A service missing part of the runtime contract: `/healthz`, `/readyz` (false while draining),
   `/metrics`, `/version`; JSON logs to stdout; config validated at startup; graceful drain on
-  SIGTERM; non-root with a read-only root filesystem
+  the image's stop signal (SIGTERM, or SIGQUIT for nginx); non-root with a read-only root
+  filesystem
 - A copy-pasted pipeline or chart instead of `.github/workflows/_*.yml` or `deploy/charts/service`
 - An infra-changing command run instead of proposed in the PR for a human to run
 

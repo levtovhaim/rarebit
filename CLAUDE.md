@@ -11,7 +11,7 @@
 - cost controls
 
 ## Architecture
-- `apps/web`: React + Vite static UI (Hebrew, RTL), served by nginx-unprivileged. Supports `BASE_PATH`.
+- `apps/web`: React + Vite static UI (Hebrew, RTL), served by nginx-unprivileged. One build and one image work under any path prefix: the page reads its prefix from its own URL, so there's no `BASE_PATH` setting.
 - `apps/game`: Node.js + TypeScript + Socket.IO (websocket transport only). Rounds are server-authoritative. **All room and matchmaking state is in Redis**, so any pod can serve any room. Nicknames and answers pass an offensive-word filter. Answer events go to a Redis Stream for the data pipeline.
 - `apps/validator`: Go. Checks answers against the word lists in Postgres, using `native/hebrew-normalize` through cgo for normalization and fuzzy matching. The same image runs the `migrate` and `rarity` jobs.
 - `apps/bots`: TypeScript simulated players: load tests, synthetic monitoring, and the test arena's personas and bot swarm.
@@ -84,7 +84,7 @@
    - endpoints: `/healthz` (liveness), `/readyz` (readiness; false while draining), `/metrics` (Prometheus), `/version` (git SHA)
    - JSON logs to stdout
    - config validated at startup
-   - graceful drain on SIGTERM
+   - graceful drain on the image's stop signal: SIGTERM, or SIGQUIT for nginx, whose SIGTERM is a fast stop (ADR 0027)
    - runs as non-root with a read-only root filesystem
 8. **Docs move with the code.** An architecture change needs an ADR in `docs/adr/`. An ops change needs a runbook in `docs/runbooks/`. An incident or chaos finding gets a postmortem in `docs/postmortems/`.
 9. **Don't bypass checks.** No `--no-verify`, no disabled tests, no skipped scanners. Fix the cause, or open an issue explaining why not.

@@ -7,10 +7,12 @@
 #     /tmp (a tmpfs, or an emptyDir in Kubernetes);
 #   - nginx itself is PID 1 (not the base image's entrypoint scripts, which rewrite files under
 #     /etc/nginx), and stops gracefully on the image's stop signal, SIGQUIT;
-#   - serves the UI at / and under any path prefix, with the runtime contract (/healthz, /readyz,
-#     /metrics, /version) and JSON access logs; /version reports the GIT_SHA build arg;
-#   - holds the built files only (no sources, no Node), precompressed; nothing we add is
-#     world-writable.
+#   - serves the UI at / and under any path prefix on 8080, with the runtime contract (/healthz,
+#     /readyz, /version there, /metrics on 9113) and JSON access logs; /version reports the GIT_SHA
+#     build arg;
+#   - holds the built files only (no sources, no Node), precompressed; the configuration and the
+#     files are root's and read-only to nginx; nothing in the image is world-writable, setuid or
+#     setgid.
 #
 # The base has a shell (BusyBox, from Alpine): there's no shell-less nginx-unprivileged image.
 
@@ -63,19 +65,25 @@ LABEL org.opencontainers.image.source="https://github.com/levtovhaim/rarebit" \
       org.opencontainers.image.description="Rarebit web UI: the game on a phone, in Hebrew, served by nginx" \
       org.opencontainers.image.revision="${GIT_SHA}"
 
-# Owned by root and read-only to nginx's user, even where the root filesystem isn't read-only.
 COPY --chmod=0644 apps/web/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /out/rarebit-version.conf /etc/nginx/rarebit-version.conf
 COPY --from=build /out/web/ /srv/web/
+# The base image gives /etc/nginx to nginx's user (owner 101, group-writable), so it can run
+# under any uid and rewrite its config at start. This image runs nginx directly and never
+# rewrites it: the configuration and the files belong to root and are read-only to nginx, even
+# where the root filesystem isn't read-only.
+USER 0:0
+RUN --network=none chown -R root:root /etc/nginx /srv/web && chmod -R go-w /etc/nginx /srv/web
 
 # Numeric, so Kubernetes can check runAsNonRoot without looking the name up. The base image's
 # user already is 101; stated here so the contract doesn't depend on the base.
 USER 101:101
 # A broken configuration fails the build, not the first start. -t creates nginx's temp
 # directories under /tmp; they're removed so the image doesn't carry them.
-RUN nginx -t -q && rm -rf /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi
+RUN --network=none nginx -t -q && rm -rf /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi
 
-EXPOSE 8080
+# 8080: the UI and the probes. 9113: /metrics, for Prometheus only (never in the Ingress).
+EXPOSE 8080 9113
 # nginx's graceful stop: close the listening socket, finish the requests in flight, exit. (On
 # SIGTERM nginx stops at once and cuts transfers off.) Kubernetes and docker stop send the image's
 # stop signal. The base image sets it too; stated here for the same reason as USER.
