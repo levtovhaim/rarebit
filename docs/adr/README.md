@@ -29,3 +29,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0023](0023-bots-protocol-clients-judged-by-failed-games.md) | Build the bots as real protocol clients with a strategy hook, and judge runs by failed games | accepted |
 | [0024](0024-local-stack-with-compose-and-nginx.md) | Run the local stack with docker compose, two game replicas behind nginx | accepted; the `make smoke` bullet superseded by 0025 |
 | [0025](0025-bots-image-and-smoke-from-it.md) | Ship the bots as an image, and run `make smoke` from it | accepted |
+| [0026](0026-web-ui-static-bundle-from-the-snapshot.md) | Build the web UI as one static bundle that renders from the room snapshot | accepted |

@@ -1,0 +1,708 @@
+/* Rarebit: a squared school notebook. Paper, a faint blue grid, graphite, ballpoint ink, a red
+   pen for strikes and the last seconds, and a highlighter used once or twice. */
+:root {
+  --paper: #fbfcfe;
+  --grid: #c7d6ec;
+  --graphite: #26282c;
+  --graphite-soft: #565b66;
+  --ink: #2340b8;
+  --ink-deep: #172b80;
+  --ink-wash: #e7ecfa;
+  --red: #c8102e;
+  --marker: #ffe14d;
+  --square: 24px;
+  --margin: 40px;
+  --radius: 10px;
+  --display: "Karantina", "IBM Plex Sans Hebrew", sans-serif;
+  --text: "IBM Plex Sans Hebrew", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: var(--square) var(--square);
+  color: var(--graphite);
+  font-family: var(--text);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The notebook's margin: a red line at the start side (the right, in Hebrew). */
+body::before {
+  content: "";
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: calc(var(--margin) - 8px);
+  width: 2px;
+  background: color-mix(in srgb, var(--red) 45%, transparent);
+  pointer-events: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Layout: a sheet, with the actions in the thumb zone at the bottom ------------------- */
+
+.sheet {
+  min-height: 100dvh;
+  max-width: 34rem;
+  margin-inline: auto;
+  display: grid;
+  /* One column that never outgrows the screen: an auto column would grow to its widest item's
+     minimum width, and an <input>'s is about 20 characters. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+  padding: 16px;
+  /* The page is always RTL: the start side is the right one. Safe-area insets are physical
+     (a phone in landscape with a notch), so they're added on their own side. */
+  padding-inline-start: calc(var(--margin) + 8px + env(safe-area-inset-right, 0px));
+  padding-inline-end: max(16px, env(safe-area-inset-left, 0px));
+}
+
+.sheet-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--graphite-soft);
+  font-size: 15px;
+}
+
+.sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.thumb {
+  position: sticky;
+  inset-block-end: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 12px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--paper) 24px);
+}
+
+/* ---- Type ------------------------------------------------------------------------------- */
+
+.display {
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 0.95;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.wordmark {
+  font-size: 76px;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+.wordmark small {
+  display: block;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--graphite-soft);
+  margin-block-start: 8px;
+}
+
+.title {
+  font-size: 44px;
+}
+
+.lead {
+  margin: 0;
+  color: var(--graphite-soft);
+}
+
+h2.lead {
+  font-size: 15px;
+  font-weight: 600;
+  margin-block: 4px -8px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+/* A row of the paper game: the letter, and a category table with one answer each. */
+.example {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin: 0;
+}
+
+.example-letter {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  flex: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--paper);
+}
+
+.example dl {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  border: 1.5px solid var(--graphite);
+  border-radius: 4px;
+  background: var(--paper);
+}
+
+.example dl > div {
+  padding: 4px 6px;
+  border-inline-start: 1px solid var(--grid);
+  border-block-start: 1px solid var(--grid);
+}
+
+.example dt {
+  font-size: 12px;
+  color: var(--graphite-soft);
+}
+
+.example dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 24px;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+/* ---- Controls --------------------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  padding-inline: 14px;
+  font: inherit;
+  font-size: 19px;
+  color: var(--graphite);
+  background: var(--paper);
+  border: 2px solid var(--graphite);
+  border-radius: var(--radius);
+}
+
+.input::placeholder {
+  color: var(--graphite-soft);
+}
+
+.input-code {
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.button {
+  min-height: 52px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 18px;
+  border-radius: var(--radius);
+  border: 2px solid var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  /* The press states below are the feedback; no grey flash on tap. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .button-ink:not([disabled]):hover {
+    background: var(--ink-deep);
+  }
+
+  .button-paper:not([disabled]):hover {
+    background: var(--ink-wash);
+  }
+
+  .button-quiet:not([disabled]):hover {
+    color: var(--ink);
+  }
+}
+
+.button-paper:active {
+  background: var(--ink-wash);
+}
+
+.button-ink {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 3px 0 var(--ink-deep);
+}
+
+.button-ink:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink-deep);
+}
+
+.button-paper {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.button-quiet {
+  background: transparent;
+  color: var(--graphite-soft);
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  min-height: 44px;
+  font-weight: 400;
+  font-size: 16px;
+}
+
+.button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+}
+
+.row > .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: start;
+}
+
+.choice small {
+  font-weight: 400;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--graphite-soft);
+  font-size: 15px;
+}
+
+.rule::before,
+.rule::after {
+  content: "";
+  flex: 1;
+  border-block-start: 1.5px dashed var(--graphite-soft);
+}
+
+/* ---- Messages ---------------------------------------------------------------------------- */
+
+.note {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 2px solid var(--graphite);
+  font-size: 16px;
+}
+
+.note-error {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.note-wait {
+  border-style: dashed;
+}
+
+.banner {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-start: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-block-start: max(12px, env(safe-area-inset-top, 0px));
+  padding-inline-start: calc(var(--margin) + 8px);
+  background: var(--marker);
+  color: var(--graphite);
+  font-weight: 600;
+  box-shadow: 0 2px 0 var(--graphite);
+}
+
+/* ---- The room code: one notebook square per character, read aloud easily ---------------- */
+
+.code {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  direction: ltr;
+}
+
+.code span {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 56px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 34px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+}
+
+.qr {
+  align-self: center;
+  width: min(68vw, 260px);
+  padding: 10px;
+  background: var(--paper);
+  border: 2px solid var(--graphite);
+  border-radius: var(--radius);
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.center {
+  text-align: center;
+}
+
+/* ---- Players ------------------------------------------------------------------------------ */
+
+.players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.players li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-block-end: 1px solid var(--grid);
+  font-size: 18px;
+}
+
+.players .name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.tag {
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  color: var(--graphite-soft);
+  white-space: nowrap;
+}
+
+.tag-ink {
+  color: var(--ink);
+}
+
+.tag-red {
+  color: var(--red);
+}
+
+.score {
+  font-family: var(--mono);
+  font-weight: 600;
+  min-width: 3ch;
+  text-align: end;
+}
+
+.strikes {
+  color: var(--red);
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+}
+
+/* ---- A round: the letter, the category, the clock ---------------------------------------- */
+
+.prompt {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.letter {
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  flex: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 140px;
+  line-height: 1;
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--paper);
+}
+
+/* Karantina's letters fill the top ~60% of the line box: lift the line so the letter is centered
+   (measured: at 140px the body sits about 7px low). */
+.letter span {
+  transform: translateY(-0.05em);
+}
+
+.category {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.category small {
+  color: var(--graphite-soft);
+  font-size: 15px;
+}
+
+.category strong {
+  font-family: var(--display);
+  font-size: 56px;
+  line-height: 1;
+}
+
+/* The signature: one notebook square per second, crossed out in pencil as time passes. */
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.squares {
+  flex: 1;
+  display: grid;
+  /* Notebook-sized squares: shrink to fit, never grow past a square of the page. */
+  grid-template-columns: repeat(var(--n), minmax(0, 26px));
+  justify-content: start;
+  gap: 3px;
+}
+
+.sq {
+  aspect-ratio: 1;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+}
+
+.sq-crossed {
+  border-color: var(--graphite-soft);
+  background:
+    linear-gradient(45deg, transparent 44%, var(--graphite) 44% 56%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, var(--graphite) 44% 56%, transparent 56%),
+    var(--paper);
+}
+
+.sq-urgent {
+  border: 2.5px solid var(--red);
+  transform: scale(1.18);
+  animation: throb 1s ease-in-out infinite;
+}
+
+@keyframes throb {
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+.seconds {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 44px;
+  line-height: 1;
+  min-width: 2.2ch;
+  text-align: center;
+  direction: ltr;
+}
+
+.seconds-urgent {
+  color: var(--red);
+  font-size: 56px;
+}
+
+.seconds-urgent::after {
+  content: "!";
+}
+
+.timer-small .seconds {
+  font-size: 30px;
+}
+
+/* ---- Results ------------------------------------------------------------------------------ */
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.results li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "who points" "answer points" "verdict points";
+  column-gap: 12px;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--grid);
+}
+
+.results .who {
+  grid-area: who;
+  font-weight: 600;
+}
+
+.results .answer {
+  grid-area: answer;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.results .answer-empty {
+  color: var(--graphite-soft);
+}
+
+.results .verdict {
+  grid-area: verdict;
+  font-size: 15px;
+}
+
+.verdict-bad {
+  color: var(--red);
+}
+
+.results .points {
+  grid-area: points;
+  align-self: center;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 26px;
+  direction: ltr;
+}
+
+.points-strike {
+  color: var(--red);
+  border: 2px solid var(--red);
+  border-radius: 50%;
+  padding: 2px 8px;
+  font-size: 18px;
+}
+
+.mine {
+  background: linear-gradient(transparent 55%, color-mix(in srgb, var(--marker) 70%, transparent) 55%);
+}
+
+.vote-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 2px solid var(--graphite);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.vote-item .answer {
+  overflow-wrap: anywhere;
+  font-family: var(--display);
+  font-size: 44px;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.winner {
+  font-family: var(--display);
+  font-size: 54px;
+  line-height: 1;
+  color: var(--ink);
+  padding: 4px 14px;
+  border: 3px solid var(--red);
+  border-radius: 50% / 40%;
+  align-self: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sq-urgent {
+    animation: none;
+  }
+
+  .button-ink:active {
+    transform: none;
+  }
+}

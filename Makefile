@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke up smoke down kind-up kind-down
+.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -56,6 +56,9 @@ game-integration: ## Run the game's Redis tests (several servers as pods) agains
 	for _ in $$(seq 30); do docker exec "$$name" redis-cli ping 2>/dev/null | grep -q PONG && break; sleep 0.5; done; \
 	port="$$(docker port "$$name" 6379/tcp | head -n1 | sed 's/.*://')"; \
 	cd apps/game && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm run test:integration
+
+web: ## Install the locked npm packages, type-check, unit-test and build apps/web (static files in dist/)
+	cd apps/web && npm ci --no-fund && npm run typecheck && npm test && npm run build && test -f dist/index.html
 
 bots: ## Install the locked npm packages, type-check, unit-test and build apps/bots
 	cd apps/bots && npm ci --no-fund && npm run typecheck && npm test && npm run build && test -f dist/main.js

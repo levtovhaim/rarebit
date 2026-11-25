@@ -9,7 +9,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `native/hebrew-normalize` | C++20 static library, C API | Normalizes answers and matches them against word-list entries ([README](../native/hebrew-normalize/README.md), ADRs 0008–0011) | built |
 | `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`: `POST /v1/validate`, and `GET /v1/categories` for the letters each category can play, HTTP/JSON ([README](../apps/validator/README.md), ADR 0013). The same binary runs the `migrate` job (schema migrations and the word-list load, ADRs 0014 and 0016) and later the `rarity` job. Image: distroless, built and smoke-tested locally (ADR 0017). | built (image not in a registry yet) |
 | `apps/game` | Node.js, TypeScript, Socket.IO | Server-authoritative rounds. All room, timer and matchmaking state is in Redis, so any pod can serve any room and finish a round another pod started ([README](../apps/game/README.md), ADRs 0019–0021). Image: distroless Node.js, built and smoke-tested locally (ADR 0022). | built (image not in a registry yet) |
-| `apps/web` | React, Vite | Hebrew (RTL) UI for phones, served as static files by nginx-unprivileged; supports `BASE_PATH` | planned |
+| `apps/web` | React, Vite | Hebrew (RTL) UI for phones, built to static files that work under any path prefix (`BASE_PATH`); every screen renders from the room snapshot the game pushes, and the player resumes after a reload or a drain ([README](../apps/web/README.md), ADR 0026). To be served by nginx-unprivileged. | built (no image yet) |
 | `apps/bots` | TypeScript, `socket.io-client` | Simulated players that are full protocol clients: the synthetic game (exit 0 or 1), load tests and the chaos observer, judged by failed games; a strategy hook for the test arena's personas ([README](../apps/bots/README.md), ADR 0023). Image: distroless Node.js, built and smoke-tested locally (ADR 0025). Later the bot swarm. | built (image not in a registry yet) |
 | `apps/content-agents` | scheduled agents | The answer curator and the category creator: they propose content changes as PRs to `data/` and never write to the database | planned |
 | `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Seeded with the six regular categories. | seeded |
@@ -20,7 +20,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 ## Request path
 
 ```
-phone ──HTTPS──> web (static files)
+phone ──HTTPS──> web (static files; the socket path follows the page's path)
 phone ──WebSocket──> game ──> validator ──> Postgres (word lists)
                       │           └─ hebrew-normalize (linked in, cgo)
                       └──> Redis (room state, fan-out between game pods)
