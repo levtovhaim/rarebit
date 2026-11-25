@@ -25,6 +25,11 @@ type Validator interface {
 	Validate(ctx context.Context, category, letter, answer string) (validate.Outcome, error)
 }
 
+// Catalog lists the playable categories (store.Store in production).
+type Catalog interface {
+	Categories(ctx context.Context) ([]validate.Category, error)
+}
+
 // ReadyChecker reports whether the dependencies can serve requests (store.Store in production).
 type ReadyChecker interface {
 	Ready(ctx context.Context) error
@@ -44,6 +49,7 @@ type Version struct {
 // Options configures a Server.
 type Options struct {
 	Validator         Validator
+	Catalog           Catalog
 	Ready             ReadyChecker
 	Log               *slog.Logger
 	Version           Version
@@ -101,6 +107,7 @@ func New(opts Options) *Server {
 			promhttp.InstrumentHandlerCounter(requests.MustCurryWith(labels), h)))
 	}
 	route("POST /v1/validate", "/v1/validate", s.validate)
+	route("GET /v1/categories", "/v1/categories", s.categories)
 	route("GET /healthz", "/healthz", s.healthz)
 	route("GET /readyz", "/readyz", s.readyz)
 	route("GET /version", "/version", s.version)
@@ -204,6 +211,21 @@ func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.answers.WithLabelValues(string(out.Result), detail).Inc()
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) categories(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), s.opts.RequestTimeout)
+	defer cancel()
+	list, err := s.opts.Catalog.Categories(ctx)
+	if err != nil {
+		s.opts.Log.Error("listing categories failed", "err", err)
+		writeJSON(w, http.StatusServiceUnavailable, apiError{"unavailable", "the word lists can't be read right now"})
+		return
+	}
+	if list == nil {
+		list = []validate.Category{} // an empty array, not null
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"categories": list, "min_letter_words": validate.MinLetterWords})
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {

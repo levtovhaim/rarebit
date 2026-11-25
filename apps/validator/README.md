@@ -47,6 +47,14 @@ Errors from `/v1/validate` are JSON, `{"error": "<code>", "message": "..."}`:
 
 On a 503, or when no validator answers at all, the game should retry once (the call is read-only), then treat the answer as `unknown`. Other paths and methods (a `GET` on `/v1/validate`, say) get Go's plain-text 404 or 405.
 
+`GET /v1/categories` lists what a round can use: every live category, with the round letters that have at least `min_letter_words` (3) entries in it, in alphabet order. A letter with fewer entries isn't listed, so the game never picks it for that category. Retired categories, and categories with no such letter, don't appear.
+
+```json
+{"categories": [{"id": "country", "name": "ארץ", "kind": "regular", "letters": ["א", "ב", "ג"]}], "min_letter_words": 3}
+```
+
+The game caches it; it changes only with a content load. A 503 means Postgres failed or didn't answer within 3 s.
+
 ## Runtime endpoints
 
 | Endpoint | Meaning |
@@ -82,7 +90,7 @@ Environment variables, all checked at startup; the process exits with every prob
 | `VALIDATOR_SHUTDOWN_TIMEOUT` | `20s` | how long in-flight requests get after that |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
-Fixed timeouts (ADR 0015): 3 s per validation, 1 s per readiness check, 2 s per new connection or dial. In Postgres: `statement_timeout` 2.5 s and `lock_timeout` 1 s on the request pool.
+Fixed timeouts (ADR 0015): 3 s per API request (`/v1/validate`, `/v1/categories`), 1 s per readiness check, 2 s per new connection or dial. In Postgres: `statement_timeout` 2.5 s and `lock_timeout` 1 s on the request pool.
 
 On SIGTERM the process:
 1. fails `/readyz` and turns keep-alives off, so every response closes its connection and clients reconnect to other pods;
@@ -126,7 +134,12 @@ make validator               # builds the library into native/build/hn-prefix, t
 make validator-integration   # the same tests plus the Postgres ones, against a throwaway postgres:18.7 container
 ```
 
-The Postgres tests cover the migrate run, its lock and its checksums, every kind of lookup, retiring and restoring a category, and recovery after a database stall: a proxy that accepts connections and never answers, then forwards again.
+The Postgres tests cover:
+- the migrate run, its lock and its checksums;
+- every kind of lookup;
+- the category list: each letter it lists has at least 3 words, the thinner ones are left out, and retired categories drop out;
+- retiring and restoring a category;
+- recovery after a database stall: a proxy that accepts connections and never answers, then forwards again.
 
 The binary is `apps/validator/build/validator`. It links the C++ library statically and, on Linux, the C++ runtime (`libstdc++`) dynamically. Set the version at build time with `-ldflags "-X main.version=<sha7>"`; without it, the binary reports the SHA the Go toolchain recorded, or `unknown`.
 
@@ -161,7 +174,7 @@ The smoke test runs the image as Kubernetes will: `--read-only`, every capabilit
 - `version` prints the same SHA as the image's revision label;
 - `check-ready` fails when nothing is serving;
 - `migrate` loads the word lists from the image, and a rerun changes nothing;
-- `serve` gets ready and validates an answer, and `check-ready` succeeds inside the container;
+- `serve` gets ready, validates an answer and lists the playable categories, and `check-ready` succeeds inside the container;
 - SIGTERM drains and exits 0.
 
 It runs on Linux and in WSL. The JSON body goes to curl as bytes on stdin, so it also works where arguments get re-encoded (Git Bash).
