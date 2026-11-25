@@ -62,6 +62,9 @@
 | Every game pod draining or crash-looping | Check the rollout (`kubectl rollout status deploy/game`) and the logs for `invalid configuration` (the message lists each problem, minus values). |
 | A room stuck with a lease held by a dead pod | Wait 15 s: the lease expires and another pod takes it. If it doesn't, check that some pod is ready. |
 | Validator down | Fix the validator; nothing to do in the game. |
+| `exec: "/bin/sh": ... no such file or directory` at container start, or `FailedPreStopHook` | Something runs a shell in an image that has none (ADR 0022): a shell-form command, an `exec` probe or a shell `preStop`. Use `httpGet` probes, and exec form for any command; for a command health check, `/nodejs/bin/node /app/dist/check-ready.js`. |
+| `Cannot use import statement outside a module`, or `ERR_MODULE_NOT_FOUND` at start | The image is missing `package.json` (its `"type": "module"`) or a production dependency: an image not built from `apps/game/Dockerfile` as committed. Rebuild it. |
+| Pods killed during rollouts without `server:draining` reaching players (no `"msg":"draining"` in the log before the pod went) | The server isn't PID 1 (a wrapper such as `npm start` or a shell is in between), or `terminationGracePeriodSeconds` is shorter than the drain (apps/game/README.md → Shutdown). |
 
 Every command in Diagnose is read-only. To end one stuck game by hand, delete its keys and its timer together:
 

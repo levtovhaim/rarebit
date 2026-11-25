@@ -1,0 +1,17 @@
+# Build context for apps/game/Dockerfile (the context is the repo root; BuildKit reads this file
+# instead of the root .dockerignore). An allowlist of exactly what the build uses: no tests, no
+# local node_modules or dist.
+*
+!apps/game/package.json
+!apps/game/package-lock.json
+!apps/game/.npmrc
+!apps/game/tsconfig.json
+!apps/game/tsconfig.build.json
+!apps/game/src/
+# A second guard inside those paths: untracked local config never goes in.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/.vscode/
+**/.idea/
