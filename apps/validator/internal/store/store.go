@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -180,6 +182,39 @@ func (s *Store) CategoryExists(ctx context.Context, category string) (bool, erro
 	var ok bool
 	err := s.pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM categories WHERE id = $1 AND retired_at IS NULL)", category).Scan(&ok)
 	return ok, err
+}
+
+// Categories returns the live categories that have at least one letter with MinLetterWords
+// entries, each with those letters in alphabet order, sorted by id.
+func (s *Store) Categories(ctx context.Context) ([]validate.Category, error) {
+	rows, err := s.pool.Query(ctx, `SELECT c.id, c.name, c.kind, w.first_letter
+		FROM categories c JOIN words w ON w.category_id = c.id
+		WHERE c.retired_at IS NULL
+		GROUP BY c.id, c.name, c.kind, w.first_letter
+		HAVING count(*) >= $1
+		ORDER BY c.id`, validate.MinLetterWords)
+	if err != nil {
+		return nil, err
+	}
+	type row struct{ ID, Name, Kind, Letter string }
+	found, err := pgx.CollectRows(rows, pgx.RowToStructByPos[row])
+	if err != nil {
+		return nil, err
+	}
+	var out []validate.Category
+	for _, r := range found {
+		if len(out) == 0 || out[len(out)-1].ID != r.ID {
+			out = append(out, validate.Category{ID: r.ID, Name: r.Name, Kind: r.Kind})
+		}
+		last := &out[len(out)-1]
+		last.Letters = append(last.Letters, r.Letter)
+	}
+	for i := range out {
+		slices.SortFunc(out[i].Letters, func(a, b string) int {
+			return strings.Index(validate.Letters, a) - strings.Index(validate.Letters, b)
+		})
+	}
+	return out, nil
 }
 
 // FindByKey returns an entry whose normalized key equals key.

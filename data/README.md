@@ -56,4 +56,4 @@ Open data (Wikidata, CC0) is planned as a second source, through a script that a
 python data/tools/check_data.py --coverage
 ```
 
-The game will skip a letter that has fewer than 3 words in a category. Some gaps are real: few country names start with ז, ח, כ or ע.
+The validator's `GET /v1/categories` leaves out a letter that has fewer than 3 words in a category, so rounds never use it. Some gaps are real: few country names start with ז, ח, כ or ע.

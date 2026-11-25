@@ -113,6 +113,7 @@ func serve(ctx context.Context, stopSignals func(), cfg config.Config, log *slog
 
 	api := server.New(server.Options{
 		Validator: validate.New(db, cfg.MaxAnswerRunes, cfg.FuzzyCandidates),
+		Catalog:   db,
 		Ready:     db,
 		Log:       log,
 		Version: server.Version{

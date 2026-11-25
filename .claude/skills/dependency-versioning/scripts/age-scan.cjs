@@ -9,7 +9,8 @@
 //
 // Usage:   node .claude/skills/dependency-versioning/scripts/age-scan.cjs [gitRef] [lockfile]   (from the repo root)
 // Example: node .claude/skills/dependency-versioning/scripts/age-scan.cjs HEAD apps/game/package-lock.json
-// Exit:    0 if no <7-day change, 1 if any version <7 days old.
+// A lockfile that doesn't exist at gitRef (a new app) has every package checked.
+// Exit:    0 if no <7-day change, 1 if any version <7 days old, 2 if gitRef isn't a commit or the lockfile can't be read.
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const root = process.cwd();

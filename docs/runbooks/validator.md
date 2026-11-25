@@ -1,6 +1,6 @@
 # Runbook: validator not ready, or `validator migrate` fails
 
-- **Alert(s):** none yet; they're [issue 23](https://github.com/levtovhaim/rarebit/issues/23): no ready validator pod, the `/v1/validate` 5xx rate, a failed migrate Job, a lasting normalizer mismatch.
+- **Alert(s):** none yet; they're [issue 23](https://github.com/levtovhaim/rarebit/issues/23): no ready validator pod, the 5xx rate of `/v1/validate` and `/v1/categories`, a failed migrate Job, a lasting normalizer mismatch.
 - **Service:** [`catalog/validator.yaml`](../../catalog/validator.yaml)
 - **Severity:** page (players' answers can't be checked)
 - **Last fired on purpose:** 2026-11-24, locally:
@@ -37,6 +37,7 @@ With no ready validator pod, the Service has no endpoints. The game treats every
    - `relation "schema_migrations" does not exist`: never migrated; see the migrate Job.
    - `the schema is at migration N and this binary needs M`: this image is newer than the schema; the migrate Job for this release didn't run or failed.
    - `no word lists loaded yet`: the schema exists but no content load finished.
+   - `validation failed` or `listing categories failed` (level ERROR): a request to `/v1/validate` or `/v1/categories` hit a Postgres error; the cause is in `err`.
 3. The migrate Job:
    ```bash
    kubectl -n <namespace> get jobs -l app.kubernetes.io/name=validator
@@ -76,6 +77,7 @@ In a shared environment a human runs them or approves the exact command (CLAUDE.
 
 - `curl -s <pod or service>/readyz` → `{"status":"ready"}`;
 - a sample answer: `curl -s -X POST <service>/v1/validate -d '{"category":"country","letter":"י","answer":"ישראל"}'` → `"result":"valid"`;
+- the playable categories: `curl -s <service>/v1/categories` → a non-empty `categories` list;
 - the migrate Job log ends with `"msg":"migrate done"`, and a rerun shows `"migrations_applied":0,"content_changed":false`.
 
 ## Roll back or escalate
