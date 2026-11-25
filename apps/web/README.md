@@ -37,13 +37,40 @@ A squared school notebook, the paper the game is played on:
 
 ## Run it locally
 
-With the local stack up (`make up`):
+`make up` serves the UI from its image at http://127.0.0.1:8080, behind the stack's nginx with the game ([compose/](../../compose/README.md)). To see a game without other people, have the bots join quick play: `docker compose -f compose/compose.yaml run --rm bots synthetic --game-mode quickplay --players 2`, after joining quick play in the browser.
+
+While changing the UI, the Vite dev server reloads on every edit, against the same stack:
 
 ```bash
 cd apps/web && npm ci && npm run dev    # http://localhost:5173, proxies /socket.io to the stack's nginx
 ```
 
-The stack's game accepts `http://localhost:5173`. To see a game without other people, have the bots join quick play: `docker compose -f compose/compose.yaml run --rm bots synthetic --game-mode quickplay --players 2`, after joining quick play in the browser.
+The stack's game accepts `http://localhost:5173`. The dev server sends none of the image's headers, so a Content-Security-Policy problem shows only on the image.
+
+## The image
+
+`apps/web/Dockerfile` ([ADR 0027](../../docs/adr/0027-web-image-nginx-any-path.md)): `vite build` in the Node builder, then nginx-unprivileged serving `/srv/web` with [nginx.conf](nginx.conf).
+
+- **How it runs:** nginx is PID 1, as uid 101, on a read-only root filesystem with `/tmp` writable (a tmpfs, or an emptyDir in Kubernetes), with one worker, listening on 8080. Its stop signal is SIGQUIT, nginx's graceful stop.
+- **Any path prefix:** `/` and `/pr-12/` serve the same page, and `/pr-12/assets/<file>` the same files. `/pr-12` redirects to `/pr-12/`. Anything else is 404.
+- **Caching and headers** ([ADR 0028](../../docs/adr/0028-web-caching-and-security-headers.md)):
+  - hashed assets are cached for a year (`immutable`);
+  - `index.html` is revalidated on every load (`no-cache`, then a 304 when unchanged);
+  - every response carries a strict Content-Security-Policy (same origin only), `nosniff` and `no-referrer`;
+  - text files are precompressed, and nginx sends the `.gz` copy to clients that accept gzip.
+- **The contract:**
+
+  | Path | Answers |
+  |---|---|
+  | `/healthz`, `/readyz` | 200 while nginx accepts connections. After SIGQUIT it closes its socket, so the probe fails. |
+  | `/metrics` | Prometheus gauges from nginx's connection counters. 404 for requests through a proxy or the load balancer (`X-Forwarded-For`). |
+  | `/version` | `{"version":"<git sha>","nginx":"1.31.7"}` |
+
+  Access logs are JSON lines on stdout, with the version. nginx's own messages go to stderr in its plain format.
+
+```bash
+make web-image-smoke    # build rarebit-web:dev and check all of the above, run non-root and read-only
+```
 
 ## Build and test
 
@@ -57,6 +84,6 @@ The unit tests cover the logic the screens rely on:
 - the state reducer (seating, a new phase, a new round forgetting the sent answer and votes, a late snapshot of another room, the rotated token, a lost room);
 - the copy: a Hebrew message for every error code the game's README lists, and a mark and a word for every verdict.
 
-The build is about 93 KB of JavaScript and 16 KB of CSS, gzipped, plus the font files a phone needs.
+The build is about 93 KB of JavaScript and 4 KB of CSS, gzipped, plus the font files a phone needs (each one a file, never inlined: ADR 0028).
 
-Not covered yet: browser tests (Playwright, across OSes and browsers, come with the test arena), and the image that serves `dist/` behind the stack's nginx.
+Not covered yet: browser tests (Playwright, across OSes and browsers, come with the test arena).
