@@ -12,6 +12,11 @@ describe("loadConfig", () => {
     expect(c.allowedOrigins).toEqual(["https://rarebit.example"]);
   });
 
+  // The default isn't checked by the schema, so set it explicitly too.
+  it.each(["/socket.io", "/pr-12/socket.io", "/rarebit_game/ws"])("takes SOCKET_PATH=%s", (path) => {
+    expect(loadConfig({ ...base, SOCKET_PATH: path }).SOCKET_PATH).toBe(path);
+  });
+
   it.each([
     { value: "https://a.example, https://b.example:8443", want: ["https://a.example", "https://b.example:8443"] },
     { value: "*", want: null },

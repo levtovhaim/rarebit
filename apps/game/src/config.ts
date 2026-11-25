@@ -26,7 +26,7 @@ const schema = z.object({
   GAME_PORT: int(8080, 1, 65535),
   REDIS_URL: z.url({ protocol: /^rediss?$/, error: "must be a redis:// or rediss:// URL" }),
   VALIDATOR_URL: z.url({ protocol: /^https?$/, error: "must be an http:// or https:// URL" }),
-  SOCKET_PATH: z.string().regex(/^\/[A-Za-z0-9/_-]*$/, "must be a path like /socket.io").default("/socket.io"),
+  SOCKET_PATH: z.string().regex(/^\/[A-Za-z0-9/._-]*$/, "must be a path like /socket.io").default("/socket.io"),
   // Which web origins may open a WebSocket. Required, so an unset value can't open it to any site.
   ALLOWED_ORIGINS: origins,
   ROUND_SECONDS: int(20, 3, 120),
