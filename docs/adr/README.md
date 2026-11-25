@@ -26,3 +26,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0020](0020-game-client-protocol.md) | Speak to game clients in Socket.IO events with acknowledgements, resume tokens and server deadlines | accepted |
 | [0021](0021-game-timers-swept-with-leases.md) | Run game timers from a deadline set that every pod sweeps, under per-room leases | accepted |
 | [0022](0022-game-image-distroless-nodejs.md) | Run the game image on distroless Node.js, with Node itself as PID 1 | accepted |
+| [0023](0023-bots-protocol-clients-judged-by-failed-games.md) | Build the bots as real protocol clients with a strategy hook, and judge runs by failed games | accepted |

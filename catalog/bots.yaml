@@ -1,0 +1,21 @@
+# Service catalog entry (catalog/README.md).
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: bots
+  description: Simulated players. The synthetic game (black-box monitoring), load tests and the chaos observer.
+  labels:
+    tier: "3" # players never notice it; without it, an outage is found by players instead of by the synthetic game
+  links:
+    - url: https://github.com/levtovhaim/rarebit/blob/main/docs/runbooks/bots.md
+      title: Runbook
+    - url: https://github.com/levtovhaim/rarebit/blob/main/apps/bots/README.md
+      title: README
+spec:
+  type: job
+  lifecycle: experimental
+  owner: user:haimlevtov
+  system: rarebit
+  dependsOn:
+    - component:game
+# SLOs: none of its own. The synthetic game measures the game's (a game that finishes, every run).
