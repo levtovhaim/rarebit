@@ -36,10 +36,44 @@ resource "aws_ecr_lifecycle_policy" "this" {
 }
 
 locals {
-  # TODO(human): the lifecycle rules. They decide which images ECR deletes, and an image a running
-  # environment still uses must never be one of them. tests/ecr_repositories.tftest.hcl says what the
-  # rules must do; `make infra` passes when they do.
+  # PR images go after 3 days, untagged leftovers after 1 day, and the newest 15 main images stay:
+  # an environment must not fall more than 15 main builds behind, or its image expires (ADR 0036).
   lifecycle_policy = jsonencode({
-    rules = []
+    rules = [
+      {
+        rulePriority = 1
+        description  = "PR images: 3 days after the push"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["pr-"]
+          countType     = "sinceImagePushed"
+          countUnit     = "days"
+          countNumber   = 3
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "main images: keep the newest 15"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["main-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 15
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 3
+        description  = "untagged images: 1 day after the push"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = { type = "expire" }
+      },
+    ]
   })
 }
