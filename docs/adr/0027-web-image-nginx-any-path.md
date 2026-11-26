@@ -1,6 +1,6 @@
 # 0027. Serve the web UI from its own nginx-unprivileged image, under any path prefix
 
-- **Status:** accepted
+- **Status:** accepted; the base image superseded by ADR 0031 (the slim variant, with pinned Alpine security updates)
 - **Date:** 2026-11-25
 - **Deciders:** platform owner
 

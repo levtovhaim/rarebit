@@ -59,8 +59,9 @@ RUN find /out/data -type d -exec chmod 0555 {} + \
 # ---- Runtime stage: the binary, the word lists, nothing else ---------------------------------
 
 # distroless cc: glibc and libstdc++ (which the binary loads), plus OpenSSL, zlib, zstd, libgomp,
-# tzdata and CA certificates (which it doesn't); no shell, no package manager.
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cb87acc574abe719b6e5c547384defa2f7b1f24af9605d3f618cf852495d8be2
+# tzdata and CA certificates (which it doesn't); no shell, no package manager. This build:
+# 2026-11-25, younger than the 7-day rule allows, for a security fix (libzstd1, CVE-2026-124851).
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:29ee70762214fe8190cea04ef1c0a84a8365879e047ce8f911ae5a5ab2355fa2
 
 ARG GIT_SHA
 LABEL org.opencontainers.image.source="https://github.com/levtovhaim/rarebit" \

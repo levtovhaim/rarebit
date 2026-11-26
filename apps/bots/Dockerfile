@@ -54,8 +54,8 @@ RUN find /out/data -type d -exec chmod 0555 {} + \
 # ---- Runtime stage: Node, the built bots, their dependencies, the word lists ------------------
 
 # distroless nodejs26: Node 26.13.1 and the libraries it loads; no shell, no npm (ADR 0022).
-# This build: 2026-11-12, as for the game.
-FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:1d736cf8b5716c07a245301f92717143215d248fd55771ee1936ef4b3302e531
+# This build: 2026-11-25, as for the game (a security fix: libzstd1, CVE-2026-124851).
+FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:a84242e747fbb5aaaa0180c273b6f7130ca34b3300082192ef58eea96089eb3c
 
 ARG GIT_SHA
 LABEL org.opencontainers.image.source="https://github.com/levtovhaim/rarebit" \

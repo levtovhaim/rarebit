@@ -56,9 +56,19 @@ RUN --network=none { expr "$GIT_SHA" : '[0-9a-f]\{7\}$' >/dev/null \
 
 # ---- Runtime stage: nginx and the built files -----------------------------------------------------
 
-# nginx 1.31.7 on Alpine 3.24, the unprivileged build (uid 101, port 8080, temp paths in /tmp):
-# the same digest as the local stack's nginx (compose/compose.yaml).
-FROM nginxinc/nginx-unprivileged:1.31.7-alpine3.24@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+# nginx 1.31.7 on Alpine 3.24, the unprivileged build (uid 101, port 8080, temp paths in /tmp), in
+# its slim variant: no curl and no optional nginx modules, so none of the libraries they bring
+# (libcurl, libxml2, libxslt, brotli, expat). This build: 2026-10-19, the same digest as the
+# local stack's nginx (compose/compose.yaml).
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine3.24-slim@sha256:a8cb0f33d51fa107c96fd2bd3a71aaf564ec131e9d2bdf8700944f0ed8b170d7
+
+# Alpine's security updates the base doesn't have yet (upstream hasn't rebuilt it since
+# 2026-10-19): musl 1.2.6-r3 (CVE-2026-107891) and zlib 1.4-r0 (CVE-2026-85091). Pinned, so the
+# image's content doesn't drift between builds: when Alpine replaces these versions, this step
+# fails and the pins move, or go once the base is rebuilt with them. The only step with network
+# access in this stage.
+USER 0:0
+RUN apk add --no-cache musl=1.2.6-r3 musl-utils=1.2.6-r3 zlib=1.4-r0
 
 ARG GIT_SHA
 LABEL org.opencontainers.image.source="https://github.com/levtovhaim/rarebit" \
@@ -71,8 +81,7 @@ COPY --from=build /out/web/ /srv/web/
 # The base image gives /etc/nginx to nginx's user (owner 101, group-writable), so it can run
 # under any uid and rewrite its config at start. This image runs nginx directly and never
 # rewrites it: the configuration and the files belong to root and are read-only to nginx, even
-# where the root filesystem isn't read-only.
-USER 0:0
+# where the root filesystem isn't read-only. (Still as root, from the step above.)
 RUN --network=none chown -R root:root /etc/nginx /srv/web && chmod -R go-w /etc/nginx /srv/web
 
 # Numeric, so Kubernetes can check runAsNonRoot without looking the name up. The base image's
