@@ -1,0 +1,17 @@
+{
+  "id": "animal",
+  "name": "חי",
+  "kind": "regular",
+  "lists": [
+    {
+      "source": "test fixture",
+      "license": "MIT",
+      "words": ["חתול", "כלב", "תרנגול", "ג'ירפה", "בת יענה", "דג"]
+    },
+    {
+      "source": "test fixture, second list",
+      "license": "CC0-1.0",
+      "words": ["גמל"]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# Native (C++) code: the Hebrew normalization library, and later the command-line tool.
+# Native (C++) code: the Hebrew normalization library and the rarebit-cli command-line tool.
 # Build with the presets in CMakePresets.json, or `make native` from the repo root.
 cmake_minimum_required(VERSION 3.28)
 
@@ -15,6 +15,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Tests are off unless asked for (the presets ask), so a plain build, e.g. inside an image, needs
 # no network: only the tests download GoogleTest.
 option(RAREBIT_BUILD_TESTS "Build the unit tests (downloads GoogleTest)" OFF)
+# The command-line tool is off unless asked for (the presets ask), so the validator image's build
+# of the library compiles nothing else.
+option(RAREBIT_BUILD_CLI "Build rarebit-cli" OFF)
 option(RAREBIT_WERROR "Treat compiler warnings as errors" ON)
 option(RAREBIT_SANITIZE "Build everything with AddressSanitizer and UndefinedBehaviorSanitizer (GCC, Clang)" OFF)
 
@@ -36,3 +39,6 @@ if(RAREBIT_BUILD_TESTS)
 endif()
 
 add_subdirectory(hebrew-normalize)
+if(RAREBIT_BUILD_CLI)
+  add_subdirectory(rarebit-cli)
+endif()

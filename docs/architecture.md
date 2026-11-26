@@ -13,7 +13,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `apps/bots` | TypeScript, `socket.io-client` | Simulated players that are full protocol clients: the synthetic game (exit 0 or 1), load tests and the chaos observer, judged by failed games; a strategy hook for the test arena's personas ([README](../apps/bots/README.md), ADR 0023). Image: distroless Node.js, built and smoke-tested locally (ADR 0025). Later the bot swarm. | built (image not in a registry yet) |
 | `apps/content-agents` | scheduled agents | The answer curator and the category creator: they propose content changes as PRs to `data/` and never write to the database | planned |
 | `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Seeded with the six regular categories. | seeded |
-| `native/rarebit-cli` | C++ (CMake) | Word check and a local bots runner on Linux, Windows and macOS | planned |
+| `native/rarebit-cli` | C++ (CMake) | For developers and operators: judges an answer offline from `data/categories` with the validator's rules (a parity test checks they agree), shows normalization keys, and runs the bots image with docker ([README](../native/rarebit-cli/README.md), ADR 0030). Linux build verified; Windows and macOS with the CI matrix. | built (no releases yet) |
 | Redis | 8.10 | Room, timer and matchmaking state, Socket.IO fan-out between game pods, the answer-event stream (keys in `apps/game/src/store.ts`, tested against a local container) | used by the game |
 | Postgres | 18 | Word lists (schema in `apps/validator`, tested against a local container), answer history, the rarity table | schema for word lists |
 
