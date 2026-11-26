@@ -39,4 +39,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0033](0033-terragrunt-live-layer-over-plain-modules.md) | A thin Terragrunt live layer over plain Terraform modules | accepted |
 | [0034](0034-terraform-creates-its-own-state-bucket.md) | Terraform creates its own state bucket: the first apply on local state, then a migration | accepted |
 | [0035](0035-account-id-out-of-git.md) | Keep the AWS account ID out of git: an environment variable locally, a masked secret in CI | accepted |
-| [0036](0036-ecr-repository-per-service.md) | One private ECR repository per service image, with immutable tags and lifecycle rules | accepted |
+| [0036](0036-ecr-repository-per-service.md) | Private ECR repositories per service, separate for main and PR images, with immutable tags and lifecycle rules | accepted |
+| [0037](0037-no-terragrunt-destroy-in-global.md) | Terragrunt's destroy command never runs in the account's foundation units | accepted |

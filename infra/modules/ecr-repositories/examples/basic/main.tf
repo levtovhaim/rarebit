@@ -1,5 +1,7 @@
 # Plain Terraform, no Terragrunt: `terraform init && terraform plan` in this directory, with AWS
 # credentials. It shows the module on its own; the real repositories come from infra/live/_global/ecr.
+# Plan, don't apply: the repositories have prevent_destroy, and the registry scanning configuration is
+# one per account and region, so an apply here would take over the real one.
 
 provider "aws" {
   region = "eu-central-1"
@@ -18,5 +20,8 @@ provider "aws" {
 module "ecr_repositories" {
   source = "../.."
 
-  repositories = ["example/service"]
+  repositories = {
+    "example/service"    = "main"
+    "example/pr/service" = "pr"
+  }
 }

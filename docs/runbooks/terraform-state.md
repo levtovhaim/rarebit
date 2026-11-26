@@ -12,6 +12,7 @@
 | `Error acquiring the state lock` | Another plan or apply holds the unit's lock, or a crashed one left it behind. Plans take the lock too. The lock is the object `<unit path>/terraform.tfstate.tflock` in the state bucket. |
 | `AWS account ID not allowed` | The active credentials belong to another account than `RAREBIT_AWS_ACCOUNT_ID`. The provider stopped before doing anything. |
 | `Error in function call` on `get_env` or `regex` with `RAREBIT_AWS_ACCOUNT_ID` | The variable is unset, empty or not 12 digits ([infra/README.md](../../infra/README.md) → Setup). |
+| `Early exit in terragrunt unit … due to exclude block with no_run = true`, exit 0 | Expected for `destroy` in a `_global` unit: Terragrunt's destroy command skips the account's foundation (ADR 0037). Nothing was destroyed. |
 | `Backend configuration changed` | The backend in the generated config differs from the one the working copy was initialized with. Expected once, during the bootstrap migration. Otherwise `RAREBIT_BOOTSTRAP_LOCAL_STATE` is set by mistake: unset it. |
 | `AccessDenied` or `NoSuchBucket` from the backend | Expired credentials, a missing permission, or the bucket isn't there |
 | `Failed to persist state` / `Failed to save state` at the end of an apply | The apply changed AWS, but writing the new state to S3 failed (expired credentials, network). Terraform wrote `errored.tfstate` instead: see the fix below. |
@@ -125,13 +126,14 @@ If the bucket was lost, so is every other unit's state. Run the bootstrap above,
 ## Roll back or escalate
 
 - The state is versioned: a bad write is undone by restoring the version before it (above).
-- Deleting the bucket on purpose needs the bucket policy's `DenyDeletingTheBucketOrItsHistory` statement removed first, in a reviewed PR and an apply.
+- Deleting the bucket on purpose takes one reviewed PR and an apply that: lift `prevent_destroy` in the module (bucket, versioning, policy), remove the bucket policy's `DenyDeletingTheBucketOrItsHistory` statement, and change the `exclude` block in `infra/live/root.hcl` (ADR 0037). Until then, `terragrunt destroy` there prints `Early exit … due to exclude block with no_run = true` and exits 0.
 - If the bucket itself is damaged, or its policy locks everyone out, use the account's root user, which can always remove a bucket policy. Don't reach for `--backend-bootstrap`: that would let Terragrunt create a bucket with its own settings (ADR 0034).
 
 ## Prevention
 
 - `prevent_destroy` on the bucket, its versioning and its policy; a bucket policy that denies everyone deleting the bucket or an old version; versioning with 90 days and the newest 20 versions of history (ADR 0032).
 - `allowed_account_ids` in every unit's provider and backend, from an account ID that must be exactly 12 digits (ADRs 0033, 0035).
+- Terragrunt's destroy command skips every `_global` unit, also in `run --all` (ADR 0037); `make infra` checks it.
 - `make infra` runs with no AWS credentials, so a test can't reach AWS.
 - CI plans with a role that may read state and take the lock, and nothing else; applies wait for the lock (issue #62).
 - Reads and writes of state audited with CloudTrail data events (issue #58).

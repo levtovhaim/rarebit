@@ -51,7 +51,15 @@ infra: ## Check infra/ with no AWS credentials: validate and test each module (A
 			init -backend=false -input=false -lockfile=readonly -no-color >/dev/null; \
 		RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt run --working-dir "$$u" --no-auto-init -- validate -no-color >/dev/null; \
 		echo "$$u: valid (and refuses an empty account ID)"; \
-	done
+	done; \
+	echo "== infra/live: no destroy reaches a _global unit (ADR 0037)"; \
+	planned="$$(RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt find --working-dir infra/live --as plan)"; \
+	destroyed="$$(RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt find --working-dir infra/live --as destroy)"; \
+	grep -q '^_global/' <<<"$$planned" || { echo "make infra: terragrunt find listed no _global unit to plan, so the destroy check would prove nothing" >&2; exit 1; }; \
+	if grep -q '^_global/' <<<"$$destroyed"; then \
+		echo "make infra: a destroy would reach $$(grep '^_global/' <<<"$$destroyed" | tr '\n' ' ')(the exclude block in infra/live/root.hcl)" >&2; exit 1; \
+	fi; \
+	echo "$$(grep -c '^_global/' <<<"$$planned") _global units, none queued for destroy"
 
 # The CMake preset for this OS (native/CMakePresets.json): Windows sets OS=Windows_NT, macOS
 # reports Darwin, anything else (Linux, WSL) uses GCC. Override it, e.g. for the sanitizer

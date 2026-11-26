@@ -1,12 +1,25 @@
 # ecr-repositories
 
-Private ECR repositories for the service images, one per service (ADR 0036). CI pushes `pr-<number>-<sha7>` and `main-<sha7>` tags (CLAUDE.md → Conventions); the cluster's nodes pull from here.
+Private ECR repositories for the service images (ADR 0036), in two kinds, given as `name => kind`:
 
-- **Immutable tags:** a tag names one image forever, so a deployed `main-<sha7>` is always the image that was tested. Pushing the same tag twice fails: CI checks whether the tag exists before it builds.
-- **Scanning:** basic scanning (free) on every push.
+- **`main`**, e.g. `rarebit/game`: `main-<sha7>` images from `main`. Only main's CI may push here (the GitHub OIDC roles), and deployments pull from here.
+- **`pr`**, e.g. `rarebit/pr/game`: `pr-<number>-<sha7>` images for pull requests. IAM can limit pushes by repository but not by tag, so this split is what keeps a PR job from planting a `main-` tag.
+
+Every repository:
+
+- **Immutable tags.** A tag can't be overwritten; deployments still pin the digest, because a deleted or expired tag could be pushed again.
+- **Scanning:** basic (free) on every push, set at the registry level for every repository (`aws_ecr_registry_scanning_configuration`, one per account and region, so use this module once), and per repository as a fallback.
 - **Encryption:** AES256 with the key ECR manages. Not a customer-managed KMS key: ADR 0036 says why.
-- **Lifecycle:** the same rules on every repository. PR images expire 3 days after they're pushed, untagged images after 1 day, and the newest 15 `main-` images are kept. An image a running environment uses must never be one that expires (ADR 0036; [runbook](../../../docs/runbooks/ecr.md)).
-- **Deletion:** `force_delete = false`, so Terraform refuses to delete a repository that still holds images.
+- **Deletion:** `prevent_destroy` and `force_delete = false`, so Terraform refuses to delete a repository, empty or not.
+
+**Lifecycle rules, per kind:**
+
+| Kind | Rules |
+|---|---|
+| `main` | keep the newest 50 `main-` images (by count); untagged images 1 day after the push |
+| `pr` | `pr-` images 7 days after the push; untagged images 1 day after the push |
+
+No rule selects `tagStatus = "any"`. An image a running environment uses must never be one that expires ([runbook](../../../docs/runbooks/ecr.md)).
 
 It's applied from `infra/live/_global/ecr`.
 
@@ -24,7 +37,10 @@ terraform {
 }
 
 inputs = {
-  repositories = ["rarebit/game", "rarebit/web"]
+  repositories = {
+    "rarebit/game"    = "main"
+    "rarebit/pr/game" = "pr"
+  }
 }
 ```
 
@@ -49,13 +65,14 @@ inputs = {
 | Name | Type |
 | ---- | ---- |
 | [aws_ecr_lifecycle_policy.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_lifecycle_policy) | resource |
+| [aws_ecr_registry_scanning_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_registry_scanning_configuration) | resource |
 | [aws_ecr_repository.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_repository) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| repositories | Names of the repositories to create, one per service image, e.g. rarebit/game. | `set(string)` | n/a | yes |
+| repositories | The repositories to create: name => kind. "main" holds main-<sha7> images (e.g. rarebit/game), "pr" holds pr-<number>-<sha7> images (e.g. rarebit/pr/game). Each kind gets its own lifecycle rules. | `map(string)` | n/a | yes |
 
 ## Outputs
 

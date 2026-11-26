@@ -23,10 +23,11 @@ locals {
   owner = "user:haimlevtov"
 }
 
-# The account's foundation (_global: the state bucket, the registries, CI access, the budgets) is
-# never destroyed by Terragrunt: not by a `run --all destroy` meant for an environment, and not by a
-# `destroy` in the unit itself (no_run). Taking one down on purpose starts with a reviewed PR that
-# changes this block. `apply -destroy` counts as `apply` here, so the same rule holds in review.
+# The destroy command never runs in the account's foundation (_global: the state bucket, the
+# registries, CI access, the budgets): a `run --all destroy` meant for an environment leaves _global
+# out of its queue, and `destroy` in the unit itself stops early with exit 0 (no_run). This catches
+# the destroy command only: `apply -destroy`, or a resource removed from the code, still deletes.
+# The modules' prevent_destroy stops those, and review and rule 2 come before any apply (ADR 0037).
 exclude {
   if      = local.env == "global"
   actions = ["destroy"]

@@ -1,6 +1,6 @@
 # infra
 
-The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0035).
+The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0037).
 
 ```
 infra/
@@ -8,13 +8,15 @@ infra/
 │   ├── state-bootstrap/     the S3 bucket for Terraform state
 │   │   ├── examples/basic/  the module with plain terraform (plan only)
 │   │   └── tests/           terraform test, AWS mocked
-│   └── ecr-repositories/    the private image registries
+│   └── ecr-repositories/    the private image registries (main and PR repositories per service)
+│       ├── examples/basic/  the module with plain terraform (plan only)
+│       └── tests/           terraform test, AWS mocked
 └── live/                    the only place with real account config
     ├── root.hcl             provider, backend, version constraints: shared by every unit
     └── _global/             the account's foundation, shared by every environment
         ├── env.hcl
         ├── bootstrap/       unit: the state bucket
-        └── ecr/             unit: the image registries, one per service
+        └── ecr/             unit: the image registries ([runbook](../docs/runbooks/ecr.md))
 ```
 
 A **unit** is a directory under `live/` with a `terragrunt.hcl`. Each unit is its own state file, keyed by its path, so one unit's change can't touch another's resources. Moving a unit means moving its state first ([runbook](../docs/runbooks/terraform-state.md) → Move or rename a unit).
@@ -46,7 +48,7 @@ terragrunt plan                   # what would change; it reads state and takes 
 
 These change real infrastructure or its state: `apply`, `destroy`, `import`, `refresh`, `taint`/`untaint`, `force-unlock`, `init -migrate-state`, and the `state` commands that write (`push`, `mv`, `rm`). A human runs them or approves the exact command (CLAUDE.md → Rules, rule 2), and says what the change costs per hour first. In agent sessions the permission prompt also asks for the read-only `state list`, `show` and `pull`.
 
-Units under `_global` (the account's foundation) can't be destroyed by Terragrunt: the `exclude` block in `root.hcl` stops `destroy` there, in the unit itself and in a `run --all`. Terragrunt then prints `Early exit … due to exclude block with no_run = true` and exits 0, and nothing was destroyed.
+Terragrunt's destroy command skips units under `_global`, the account's foundation (the `exclude` block in `root.hcl`, ADR 0037). A `run --all destroy` leaves them out of its queue. A `destroy` in the unit prints `Early exit … due to exclude block with no_run = true` and exits 0, and nothing was destroyed. That guard knows only the command: `apply -destroy`, or a resource removed from the code, still deletes, and the modules' `prevent_destroy` is what refuses those.
 
 The state bucket's unit is special the first time: its state starts in a local file and then moves into the bucket it created (ADR 0034; [runbook](../docs/runbooks/terraform-state.md) → Bootstrap from nothing).
 

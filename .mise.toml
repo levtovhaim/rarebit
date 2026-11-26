@@ -15,8 +15,10 @@ AWS_REGION = "eu-central-1"
 # filesystem is much faster for provider binaries (infra/README.md).
 TG_DOWNLOAD_DIR = "{{env.HOME}}/.cache/terragrunt"
 # One copy of each provider for every unit (Terragrunt's provider cache), instead of one per working
-# copy: the AWS provider is about 770 MB unpacked.
+# copy: the AWS provider is about 770 MB unpacked. The same folder as make infra's TF_PLUGIN_CACHE_DIR
+# (same layout), so plain Terraform and Terragrunt share that one copy too.
 TG_PROVIDER_CACHE = "1"
+TG_PROVIDER_CACHE_DIR = "{{env.HOME}}/.cache/terraform/plugins"
 
 [tools]
 # Infrastructure as code
