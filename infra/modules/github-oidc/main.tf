@@ -14,14 +14,28 @@ locals {
   main_repository_arns = [for name in var.main_repositories : "${local.ecr_repository_arn}/${name}"]
   pr_repository_arns   = [for name in var.pr_repositories : "${local.ecr_repository_arn}/${name}"]
 
-  # TODO(human): which GitHub workflow runs may take each role. One IAM condition block per role,
-  # comparing the token's claims (token.actions.githubusercontent.com:aud and :sub). A condition that
-  # matches too much lets a pull request act as main. tests/github_oidc.tftest.hcl says what each
-  # must be; `make infra` passes when they are.
+  # Which workflow runs may take each role: the token must be issued for STS (aud) and come from
+  # exactly this repository and event or branch (sub). StringEquals, never StringLike: a wildcard
+  # would let another branch, or a pull request, act as main.
   trust_conditions = {
-    pr      = {}
-    main    = {}
-    tf_plan = {}
+    pr = {
+      StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:pull_request"
+      }
+    }
+    main = {
+      StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/heads/main"
+      }
+    }
+    tf_plan = {
+      StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:pull_request"
+      }
+    }
   }
 
   ecr_pull = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer"]
