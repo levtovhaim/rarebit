@@ -1,4 +1,4 @@
-# tflint for every Terraform directory under infra/ (make infra, and the tflint hook in make check).
+# tflint for every Terraform directory under infra/ (the tflint hook in make check).
 
 config {
   call_module_type = "local"

@@ -1,5 +1,7 @@
 terraform {
-  # 1.11: native S3 state locking (use_lockfile). 1.11: mock values during plan in tests.
+  # ~> 1.17: the Terraform pinned in .mise.toml (1.17.2) and later 1.x releases. The features this
+  # module relies on are older: native S3 locking (use_lockfile) and mock values during plan in
+  # tests (override_during), both from 1.11.
   required_version = "~> 1.17"
 
   required_providers {
