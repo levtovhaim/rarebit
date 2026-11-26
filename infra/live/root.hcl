@@ -23,6 +23,17 @@ locals {
   owner = "user:haimlevtov"
 }
 
+# The destroy command never runs in the account's foundation (_global: the state bucket, the
+# registries, CI access, the budgets): a `run --all destroy` meant for an environment leaves _global
+# out of its queue, and `destroy` in the unit itself stops early with exit 0 (no_run). This catches
+# the destroy command only: `apply -destroy`, or a resource removed from the code, still deletes.
+# The modules' prevent_destroy stops those, and review and rule 2 come before any apply (ADR 0037).
+exclude {
+  if      = local.env == "global"
+  actions = ["destroy"]
+  no_run  = true
+}
+
 # The AWS provider for every unit. allowed_account_ids makes plan and apply stop before they touch
 # any other account, whatever credentials are active (ADR 0002). default_tags puts the same tags on
 # every resource the provider creates (CLAUDE.md → Rules, rule 6).

@@ -93,8 +93,8 @@
 
 ## Conventions
 - Code, comments, commits and docs are in English. Player-facing UI strings are in Hebrew (RTL).
-- Image tags: `pr-<number>-<sha7>` for PRs, `main-<sha7>` for main. Tags are immutable in ECR.
-- Promotion: a promotion PR changes only `image-tags.yaml` files under `deploy/envs/`. They are the one path under `deploy/` without a code owner (`.github/CODEOWNERS`), so promotions merge without a human; anything else in `deploy/` requests review.
+- Image tags: `pr-<number>-<sha7>` for PRs, pushed to `rarebit/pr/<service>`; `main-<sha7>` for main, pushed to `rarebit/<service>`. Tags are immutable in ECR. PR images expire 7 days after the push; each main repository keeps the newest 50 `main-` images (ADR 0036).
+- Promotion: a promotion PR changes only `image-tags.yaml` files under `deploy/envs/`. They are the one path under `deploy/` without a code owner (`.github/CODEOWNERS`), so promotions merge without a human; anything else in `deploy/` requests review. A promotion pins only `main-` images from the main repositories, by digest (`main-<sha7>@sha256:...`), and no environment may fall more than 50 `main` builds behind, or its image expires (ADR 0036).
 - Kubernetes labels: `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner`, `tier`. The values of `owner` and `tier` come from the service's `catalog/<service>.yaml` (`catalog/README.md` defines the tiers).
 - Terraform: each module has a `README.md` (terraform-docs), `examples/basic` (works with plain `terraform`), `versions.tf` and tests in `tests/`. Live config lives only in `infra/live`.
 - Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses GoogleTest through CTest; Terraform modules use `terraform test` with a mocked provider (`mock_provider`), so no test reaches AWS; game e2e runs through `apps/bots`, browser e2e through Playwright.
