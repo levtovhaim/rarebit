@@ -126,7 +126,7 @@ Then, for the ecosystem you touched:
 |---|---|
 | npm | `node .claude/skills/dependency-versioning/scripts/peer-check.cjs apps/<app>` (declared peers, whole tree), then `npm run build` in that app |
 | Go | `go build ./... && go vet ./... && go test ./...` in `apps/validator` |
-| Terraform | `terraform init -upgrade && terraform validate && tflint` in the module's `examples/basic`; the PR's plan must show no unexpected changes |
+| Terraform | `terraform init -upgrade` in the module, then `terraform providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_arm64 -platform=windows_amd64`, and copy the lock file to every directory that uses the provider (the module, its `examples/basic`, each unit under `infra/live`); then `make infra` (it inits with `-lockfile=readonly`, so a lock file left behind fails) and `make check` (tflint); the PR's plan must show no unexpected changes |
 | Helm | `helm template` with each environment's values (the chart's `values.schema.json` validates them) |
 | Images | `docker build`, `make smoke`, `trivy image <ref>` |
 | Actions | `actionlint` and `zizmor`; the workflow run on the PR is the real test |

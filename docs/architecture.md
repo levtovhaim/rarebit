@@ -16,6 +16,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `native/rarebit-cli` | C++ (CMake) | For developers and operators: judges an answer offline from `data/categories` with the validator's rules (a parity test checks they agree), shows normalization keys, and runs the bots image with docker ([README](../native/rarebit-cli/README.md), ADR 0030). Linux build verified; Windows and macOS with the CI matrix. | built (no releases yet) |
 | Redis | 8.10 | Room, timer and matchmaking state, Socket.IO fan-out between game pods, the answer-event stream (keys in `apps/game/src/store.ts`, tested against a local container) | used by the game |
 | Postgres | 18 | Word lists (schema in `apps/validator`, tested against a local container), answer history, the rarity table | schema for word lists |
+| `infra/` | Terraform modules, Terragrunt | The AWS account as code: plain modules applied by a thin Terragrunt layer, one state file per unit ([README](../infra/README.md), ADR 0033), in the one account whose ID every unit checks (ADR 0035). So far, the S3 bucket that holds every unit's state, locked with S3 lockfiles (ADR 0032), and created by Terraform itself (ADR 0034). | state bucket applied (2026-11-26) |
 
 ## Request path
 

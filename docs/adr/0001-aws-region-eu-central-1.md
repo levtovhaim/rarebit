@@ -1,6 +1,6 @@
 # 0001. Run on AWS in eu-central-1 (Frankfurt)
 
-- **Status:** accepted
+- **Status:** accepted; the Terragrunt live-layer path superseded by ADR 0033
 - **Date:** 2026-11-23
 - **Deciders:** @haimlevtov
 

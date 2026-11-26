@@ -41,6 +41,7 @@
 ## Commands
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
 - `make check`: lint and tests. Today it lints every file (gofmt included) and runs the permission-gate tests, the dependency age-scan tests and the word-list check (`data/tools/check_data.py`); it narrows to what changed once there's enough to test. Run it before every commit.
+- `make infra`: with no AWS credentials at all, for every module in `infra/modules`, `terraform validate`, `terraform test` against a mocked AWS provider and its example's `validate` (lock files read-only); then it validates every Terragrunt unit in `infra/live` with a placeholder account ID and no backend, and checks that each refuses an empty account ID. Run it whenever `infra/` changes. Real units read the account ID from `RAREBIT_AWS_ACCOUNT_ID` in `.mise.local.toml`, which git ignores (`infra/README.md` → Setup).
 - `make native`: build and test the C++ code in `native/` for the current OS (the library and `rarebit-cli`), using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes. When the validator's matching rules or `rarebit-cli check` change, run the parity test too: `bash native/rarebit-cli/tests/parity.sh` (needs `make up` and `make bots-image`).
 - `make validator`: build the library for cgo, then `go vet`, `go test -race` and `go build` in `apps/validator` (Linux; macOS unverified; on Windows in WSL). `make validator-integration` adds the Postgres tests against a throwaway container. Run both whenever `apps/validator` or `native/` changes. `make validator-image-smoke` builds the container image and runs it non-root and read-only against a throwaway Postgres: run it whenever `apps/validator`, `native/` or `data/categories/` changes.
 - `make game`: `npm ci` (install scripts disabled), type check, unit tests and build in `apps/game`. `make game-integration` runs the Redis tests, with several game servers as pods, against a throwaway Redis container. Run both whenever `apps/game` changes. `make game-image-smoke` builds the game image and runs it non-root and read-only against a throwaway Redis: run it whenever `apps/game` changes too (after `make game`, which installs its test client).
@@ -55,7 +56,7 @@
 ## Rules for every contributor (humans and agents)
 1. **PRs only.** Never push to `main`. One issue = one small PR. Use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `infra:`).
 2. **Infra-changing commands need a human's decision.** Never run these on your own:
-   - `terraform` or `terragrunt` `apply`/`destroy`/`import`/`state`
+   - `terraform` or `terragrunt` `apply`/`destroy`/`import`/`state`/`force-unlock`/`refresh`/`taint`/`untaint`, and `init -migrate-state`
    - `plat env up` / `plat env down`
    - `kubectl apply`/`delete` outside your own preview namespace
    - `helm install`/`upgrade`/`uninstall`/`rollback`
@@ -95,8 +96,8 @@
 - Image tags: `pr-<number>-<sha7>` for PRs, `main-<sha7>` for main. Tags are immutable in ECR.
 - Promotion: a promotion PR changes only `image-tags.yaml` files under `deploy/envs/`. They are the one path under `deploy/` without a code owner (`.github/CODEOWNERS`), so promotions merge without a human; anything else in `deploy/` requests review.
 - Kubernetes labels: `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner`, `tier`. The values of `owner` and `tier` come from the service's `catalog/<service>.yaml` (`catalog/README.md` defines the tiers).
-- Terraform: each module has a `README.md` (terraform-docs), `examples/basic` (works with plain `terraform`) and `versions.tf`. Live config lives only in `infra/live`.
-- Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses GoogleTest through CTest; game e2e runs through `apps/bots`, browser e2e through Playwright.
+- Terraform: each module has a `README.md` (terraform-docs), `examples/basic` (works with plain `terraform`), `versions.tf` and tests in `tests/`. Live config lives only in `infra/live`.
+- Tests: the Go validator uses table-driven tests; game and bots use vitest; the C++ code uses GoogleTest through CTest; Terraform modules use `terraform test` with a mocked provider (`mock_provider`), so no test reaches AWS; game e2e runs through `apps/bots`, browser e2e through Playwright.
 - C++ (`native/`): C++20, warnings as errors, built with the CMake preset for the OS (`make native`). Each library is a static archive with a C API, so cgo links it without C++ name mangling (ADRs 0009–0011).
 - Line endings: LF everywhere (`.gitattributes`).
 

@@ -26,8 +26,9 @@ suggestion at most.
 5. **Names, tags and labels.** Image tags `pr-<number>-<sha7>` and `main-<sha7>`; Kubernetes labels
    `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner` and `tier`.
 6. **Terraform layout.** Each module has `README.md` (terraform-docs), `examples/basic` (runs with
-   plain `terraform`) and `versions.tf`; live config lives only in `infra/live`; AWS resources are
-   tagged through provider `default_tags`.
+   plain `terraform`), `versions.tf` and `terraform test` files in `tests/` against a mocked
+   provider; live config lives only in `infra/live`; AWS resources are tagged through provider
+   `default_tags`.
 7. **Tests.** Table-driven tests for the Go validator; vitest for game and bots; e2e through
    `apps/bots`. New behavior comes with tests.
 8. **Language and format.** Code, comments, commits and docs in English; player-facing UI strings in

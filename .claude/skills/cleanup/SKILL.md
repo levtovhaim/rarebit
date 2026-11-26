@@ -67,8 +67,8 @@ For small scopes, check directly, in this order.
 - Kubernetes objects carry `app.kubernetes.io/name`, `app.kubernetes.io/part-of=rarebit`, `owner`
   and `tier`
 - Chart values validate against `deploy/charts/service/values.schema.json`
-- Terraform modules have `README.md`, `examples/basic` and `versions.tf`; live config lives only
-  in `infra/live`
+- Terraform modules have `README.md`, `examples/basic`, `versions.tf` and tests in `tests/`
+  against a mocked provider; live config lives only in `infra/live`
 - Tests: table-driven in Go; vitest for game and bots
 - Player-facing strings are Hebrew (RTL); code, comments and docs are English
 - LF line endings

@@ -4,7 +4,7 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 
 | # | Decision | Status |
 |---|---|---|
-| [0001](0001-aws-region-eu-central-1.md) | Run on AWS in eu-central-1 (Frankfurt) | accepted |
+| [0001](0001-aws-region-eu-central-1.md) | Run on AWS in eu-central-1 (Frankfurt) | accepted; the live-layer path superseded by 0033 |
 | [0002](0002-cli-credentials-aws-login.md) | Short-lived CLI credentials with `aws login`, no access keys | accepted |
 | [0003](0003-tool-versions-with-mise.md) | Pin tool versions in one place with mise | accepted |
 | [0004](0004-llm-provider-claude-api.md) | Use the Claude API for LLM features, Haiku for volume and Sonnet for curation | accepted |
@@ -35,3 +35,7 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0029](0029-web-security-headers.md) | Send a strict Content-Security-Policy and security headers on every web response | accepted |
 | [0030](0030-rarebit-cli-in-cpp.md) | Write rarebit-cli in C++, judging answers offline with the validator's rules | accepted |
 | [0031](0031-web-image-slim-base-with-pinned-alpine-updates.md) | Build the web image on the slim nginx-unprivileged base, with pinned Alpine security updates | accepted |
+| [0032](0032-terraform-state-in-s3-with-native-locking.md) | Keep Terraform state in one S3 bucket with native locking | accepted |
+| [0033](0033-terragrunt-live-layer-over-plain-modules.md) | A thin Terragrunt live layer over plain Terraform modules | accepted |
+| [0034](0034-terraform-creates-its-own-state-bucket.md) | Terraform creates its own state bucket: the first apply on local state, then a migration | accepted |
+| [0035](0035-account-id-out-of-git.md) | Keep the AWS account ID out of git: an environment variable locally, a masked secret in CI | accepted |
