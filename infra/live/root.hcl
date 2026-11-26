@@ -46,5 +46,23 @@ generate "provider" {
   EOF
 }
 
-# TODO(human): the remote_state block. Every unit's state goes to the bucket in local.state_bucket,
-# one state file per unit, locked with a lockfile in the same bucket (docs/runbooks/terraform-state.md).
+# Every unit's state: one file per unit in the state bucket, named by the unit's path, locked by a
+# lockfile next to it (ADR 0032). Terragrunt never creates or changes the bucket: the module owns it.
+remote_state {
+  backend = "s3"
+
+  generate = {
+    path      = "backend.generated.tf"
+    if_exists = "overwrite_terragrunt"
+  }
+
+  config = {
+    bucket                = local.state_bucket
+    key                   = "${path_relative_to_include()}/terraform.tfstate"
+    region                = local.region
+    encrypt               = true
+    use_lockfile          = true
+    allowed_account_ids   = [local.account_id]
+    disable_bucket_update = true
+  }
+}
