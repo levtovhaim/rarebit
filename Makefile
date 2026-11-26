@@ -60,10 +60,20 @@ game-integration: ## Run the game's Redis tests (several servers as pods) agains
 web: ## Install the locked npm packages, type-check, unit-test and build apps/web (static files in dist/)
 	cd apps/web && npm ci --no-fund && npm run typecheck && npm test && npm run build && test -f dist/index.html
 
+# Sets $sha for an image's GIT_SHA build arg: exactly 7 characters (`--short` grows when 7 are
+# ambiguous), the same as the <sha7> in image tags, plus -dirty when the tree has uncommitted
+# changes, so a local build never claims a commit it doesn't match. Each git call is its own
+# command, so its failure stops the recipe with a message. (Inside one assignment, a git failure
+# was lost: the status of an assignment with several $(…) is the last one's, and an empty SHA
+# went on to docker build.)
+IMAGE_SHA = head="$$(git rev-parse HEAD)" && status="$$(git status --porcelain)" \
+	|| { echo "$@: git can't read the commit or the tree's status" >&2; exit 1; }; \
+	sha="$${head:0:7}$${status:+-dirty}"
+
 WEB_IMAGE ?= rarebit-web:dev
 
 web-image: ## Build the web UI image (apps/web/Dockerfile; the context is the repo root)
-	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	$(IMAGE_SHA); \
 	docker build -f apps/web/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(WEB_IMAGE)" .
 
 web-image-smoke: web-image ## Run the web image non-root and read-only: the UI under any prefix, caching, the contract, the stop
@@ -85,7 +95,7 @@ bots-integration: ## Run the bots against two real game servers, a throwaway Red
 BOTS_IMAGE ?= rarebit-bots:dev
 
 bots-image: ## Build the bots image (apps/bots/Dockerfile; the context is the repo root)
-	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	$(IMAGE_SHA); \
 	docker build -f apps/bots/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(BOTS_IMAGE)" .
 
 bots-image-smoke: bots-image ## Check the bots image's contract: non-root, read-only, word lists, SIGTERM
@@ -94,7 +104,7 @@ bots-image-smoke: bots-image ## Check the bots image's contract: non-root, read-
 GAME_IMAGE ?= rarebit-game:dev
 
 game-image: ## Build the game image (apps/game/Dockerfile; the context is the repo root)
-	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	$(IMAGE_SHA); \
 	docker build -f apps/game/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(GAME_IMAGE)" .
 
 game-image-smoke: game-image ## Run the game image non-root and read-only against a throwaway Redis (needs make game first)
@@ -102,11 +112,8 @@ game-image-smoke: game-image ## Run the game image non-root and read-only agains
 
 VALIDATOR_IMAGE ?= rarebit-validator:dev
 
-# GIT_SHA: exactly 7 characters (`--short` grows when 7 are ambiguous), the same as the <sha7> in
-# image tags, plus -dirty when the tree has uncommitted changes, so a local build never claims a
-# commit it doesn't match.
 validator-image: ## Build the validator image (apps/validator/Dockerfile; the context is the repo root)
-	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	$(IMAGE_SHA); \
 	docker build -f apps/validator/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(VALIDATOR_IMAGE)" .
 
 validator-image-smoke: validator-image ## Run the image non-root and read-only against a throwaway Postgres
