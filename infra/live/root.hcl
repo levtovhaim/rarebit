@@ -23,6 +23,16 @@ locals {
   owner = "user:haimlevtov"
 }
 
+# The account's foundation (_global: the state bucket, the registries, CI access, the budgets) is
+# never destroyed by Terragrunt: not by a `run --all destroy` meant for an environment, and not by a
+# `destroy` in the unit itself (no_run). Taking one down on purpose starts with a reviewed PR that
+# changes this block. `apply -destroy` counts as `apply` here, so the same rule holds in review.
+exclude {
+  if      = local.env == "global"
+  actions = ["destroy"]
+  no_run  = true
+}
+
 # The AWS provider for every unit. allowed_account_ids makes plan and apply stop before they touch
 # any other account, whatever credentials are active (ADR 0002). default_tags puts the same tags on
 # every resource the provider creates (CLAUDE.md → Rules, rule 6).

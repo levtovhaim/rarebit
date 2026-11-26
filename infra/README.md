@@ -5,14 +5,16 @@ The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt l
 ```
 infra/
 ├── modules/                 plain Terraform, one directory per module
-│   └── state-bootstrap/     the S3 bucket for Terraform state
-│       ├── examples/basic/  the module with plain terraform (plan only)
-│       └── tests/           terraform test, AWS mocked
+│   ├── state-bootstrap/     the S3 bucket for Terraform state
+│   │   ├── examples/basic/  the module with plain terraform (plan only)
+│   │   └── tests/           terraform test, AWS mocked
+│   └── ecr-repositories/    the private image registries
 └── live/                    the only place with real account config
     ├── root.hcl             provider, backend, version constraints: shared by every unit
     └── _global/             the account's foundation, shared by every environment
         ├── env.hcl
-        └── bootstrap/       unit: the state bucket
+        ├── bootstrap/       unit: the state bucket
+        └── ecr/             unit: the image registries, one per service
 ```
 
 A **unit** is a directory under `live/` with a `terragrunt.hcl`. Each unit is its own state file, keyed by its path, so one unit's change can't touch another's resources. Moving a unit means moving its state first ([runbook](../docs/runbooks/terraform-state.md) → Move or rename a unit).
@@ -32,7 +34,7 @@ Run these in WSL, inside the repo, where mise is active.
 
    Take it from `aws sts get-caller-identity --profile rarebit --query Account --output text`, after the check in step 2. Every unit's provider and backend refuse to run in any other account, and nothing runs while the variable is unset, empty or not 12 digits.
 
-Terragrunt keeps its working copies in `~/.cache/terragrunt` (`TG_DOWNLOAD_DIR` in `.mise.toml`), not in the checkout. On a Windows drive mounted into WSL, Terragrunt can't replace its own generated files (ADR 0033), so run Terragrunt only where mise is active.
+Terragrunt keeps its working copies in `~/.cache/terragrunt` (`TG_DOWNLOAD_DIR` in `.mise.toml`), not in the checkout. On a Windows drive mounted into WSL, Terragrunt can't replace its own generated files (ADR 0033), so run Terragrunt only where mise is active. With `TG_PROVIDER_CACHE=1` (also in `.mise.toml`), Terragrunt keeps one copy of each provider for all units instead of one per working copy.
 
 ## Working with a unit
 
@@ -43,6 +45,8 @@ terragrunt plan                   # what would change; it reads state and takes 
 ```
 
 These change real infrastructure or its state: `apply`, `destroy`, `import`, `refresh`, `taint`/`untaint`, `force-unlock`, `init -migrate-state`, and the `state` commands that write (`push`, `mv`, `rm`). A human runs them or approves the exact command (CLAUDE.md → Rules, rule 2), and says what the change costs per hour first. In agent sessions the permission prompt also asks for the read-only `state list`, `show` and `pull`.
+
+Units under `_global` (the account's foundation) can't be destroyed by Terragrunt: the `exclude` block in `root.hcl` stops `destroy` there, in the unit itself and in a `run --all`. Terragrunt then prints `Early exit … due to exclude block with no_run = true` and exits 0, and nothing was destroyed.
 
 The state bucket's unit is special the first time: its state starts in a local file and then moves into the bucket it created (ADR 0034; [runbook](../docs/runbooks/terraform-state.md) → Bootstrap from nothing).
 

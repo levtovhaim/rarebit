@@ -9,6 +9,7 @@ Resources managed in `infra/live` that exist whether or not the platform is up. 
 | Resource | Unit | Model | Actual |
 |---|---|---|---|
 | Terraform state bucket (S3 Standard, eu-central-1) | `infra/live/_global/bootstrap` | Under $0.01/month. State files are kilobytes. Every old version from the last 90 days is kept, plus the newest 20 of each file however old. Each plan or apply writes and deletes a lock and reads the state, and an apply also writes it: at S3 Standard rates, well under a cent. | Created 2026-11-26; Cost Explorer actuals from the next day |
+| Image registries (ECR, 4 private repositories) | `infra/live/_global/ecr` | Cents a month. ECR bills storage per GB-month; the compressed images are 15 to 65 MB each, layers shared between tags of a repository are stored once, PR images expire after 3 days and only the newest 15 `main` images stay, so the total stays under 1 GB. Basic scanning is free; pushes from CI (data in) and pulls inside eu-central-1 cost nothing. | — (not applied yet) |
 
 ## The platform (hourly, only while up)
 
