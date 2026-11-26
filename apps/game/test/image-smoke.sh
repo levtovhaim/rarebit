@@ -75,6 +75,7 @@ set -e
 [ "$code" = 1 ] || fail "a missing ALLOWED_ORIGINS exited $code, not 1: $out"
 grep -q '"msg":"invalid configuration"' <<<"$out" || fail "no invalid-configuration log line: $out"
 grep -q 'ALLOWED_ORIGINS' <<<"$out" || fail "the log doesn't name ALLOWED_ORIGINS: $out"
+grep -q 'TRUSTED_PROXY_HOPS' <<<"$out" || fail "the log doesn't name TRUSTED_PROXY_HOPS (required): $out"
 ! grep -q 's3cret-pw' <<<"$out" || fail "the log printed a value from the environment"
 pass "a bad config exits 1, naming the setting and not its value"
 
@@ -86,7 +87,7 @@ for _ in $(seq 30); do docker exec "${id}-redis" redis-cli ping 2>/dev/null | gr
 # Serve: ready, the endpoints, one game action, then SIGTERM.
 docker run -d --name "${id}-serve" "${hardened[@]}" --network "$id" -p 127.0.0.1::8080 \
   -e REDIS_URL="redis://${id}-redis:6379" -e VALIDATOR_URL=http://127.0.0.1:1 -e ALLOWED_ORIGINS='*' \
-  -e DRAIN_DELAY_SECONDS=1 "$image" >/dev/null
+  -e TRUSTED_PROXY_HOPS=0 -e DRAIN_DELAY_SECONDS=1 "$image" >/dev/null
 port="$(docker port "${id}-serve" 8080/tcp | head -n1 | sed 's/.*://')"
 api="http://127.0.0.1:$port"
 for _ in $(seq 40); do

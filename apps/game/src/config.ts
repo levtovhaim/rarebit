@@ -39,8 +39,14 @@ const schema = z.object({
   ROOM_TTL_SECONDS: int(7200, 300, 86400),
   LOBBY_TTL_SECONDS: int(600, 60, 86400),
   MAX_CONNECTIONS_PER_IP: int(20, 1, 10000),
-  // How many proxies in front of the pod append to X-Forwarded-For (the ALB: 1). 0 = use the peer address.
-  TRUSTED_PROXY_HOPS: int(0, 0, 5),
+  // How many proxies in front of the pod append to X-Forwarded-For (the ALB: 1). 0 = use the peer
+  // address. Required: a wrong default behind a load balancer would count every player as the
+  // load balancer's address, and the per-address cap would refuse them all past a few dozen.
+  TRUSTED_PROXY_HOPS: z.coerce
+    .number({ error: "required: how many proxies append to X-Forwarded-For (0 = none; behind the ALB, 1)" })
+    .int()
+    .min(0)
+    .max(5),
   DRAIN_DELAY_SECONDS: int(15, 0, 60),
   SHUTDOWN_TIMEOUT_SECONDS: int(10, 1, 300),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

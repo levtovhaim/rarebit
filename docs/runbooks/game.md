@@ -52,6 +52,7 @@
    - `sum(rate(game_redis_errors_total[5m]))` rising;
    - `min(game_draining) == 1`: every pod is draining;
    - `sum(rate(game_answers_total{result=~"accepted|rejected"}[5m]))` spiking: the validator is out and everything goes to the vote.
+   - `sum by (reason) (rate(game_connections_refused_total[5m]))`: players turned away. `not_ready`: pods starting, draining or without Redis. `origin`: the page's origin isn't in `ALLOWED_ORIGINS`. `per_ip`: over `MAX_CONNECTIONS_PER_IP`; if many players hit it at once, check `TRUSTED_PROXY_HOPS` is 1 behind the ALB (with 0, every player counts as the load balancer's address).
 
 ## Fix
 
