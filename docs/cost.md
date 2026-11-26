@@ -4,11 +4,11 @@ What the AWS account costs, resource by resource: the model, and the actuals fro
 
 ## Always on
 
-Resources that exist whether or not the platform is up.
+Resources managed in `infra/live` that exist whether or not the platform is up. The budgets and the cost anomaly monitor, made by hand before Terraform, join this table when they're imported. Infracost diffs on infra PRs come with the CI plan workflow (issue #61).
 
 | Resource | Unit | Model | Actual |
 |---|---|---|---|
-| Terraform state bucket (S3 Standard, eu-central-1) | `infra/live/_global/bootstrap` | Under $0.01/month. State files are kilobytes, up to 20 old versions of each are kept, and a plan or apply makes a handful of requests (a lock write and delete, a state read, a state write): at S3 Standard rates, well under a cent. | Created 2026-11-26; Cost Explorer actuals from the next day |
+| Terraform state bucket (S3 Standard, eu-central-1) | `infra/live/_global/bootstrap` | Under $0.01/month. State files are kilobytes. Every old version from the last 90 days is kept, plus the newest 20 of each file however old. Each plan or apply writes and deletes a lock and reads the state, and an apply also writes it: at S3 Standard rates, well under a cent. | Created 2026-11-26; Cost Explorer actuals from the next day |
 
 ## The platform (hourly, only while up)
 
