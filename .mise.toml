@@ -17,6 +17,7 @@ terraform = "1.17.2"
 terragrunt = "1.2.2"
 tflint = "0.66.0"
 infracost = "0.10.50"
+"aqua:terraform-docs/terraform-docs" = "0.25.1"
 
 # Kubernetes and GitOps. kubectl tracks the EKS version we target (1.37, standard support).
 kubectl = "1.37.2"
