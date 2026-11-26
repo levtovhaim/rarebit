@@ -3,12 +3,13 @@
 # Commands). Only nginx publishes a port, on 127.0.0.1; everything else talks on the stack's
 # own network.
 #
-#   phone/bots ──> nginx :8080 ──> game-1 ─┐
+#   phone/bots ──> nginx :8080 ──> web (the UI's files, at /)
+#                              ├─> game-1 ─┐  (/socket.io/)
 #                              └─> game-2 ─┴──> redis
 #                                          └──> validator ──> postgres <── migrate (once)
 #
-# Images: `make up` builds rarebit-validator:dev and rarebit-game:dev first (the same Make
-# targets as the image smoke tests), so compose never builds or pulls our own images.
+# Images: `make up` builds rarebit-validator:dev, rarebit-game:dev and rarebit-web:dev first (the
+# same Make targets as the image smoke tests), so compose never builds or pulls our own images.
 name: rarebit
 
 # How our services run in Kubernetes too (CLAUDE.md → Rules, rule 7): read-only root
@@ -128,6 +129,25 @@ services:
   game-1: *game
   game-2: *game
 
+  # The web UI's files (apps/web/Dockerfile): nginx as uid 101, writing only to /tmp.
+  web:
+    <<: *hardened
+    image: rarebit-web:dev
+    pull_policy: never
+    tmpfs: [/tmp]
+    # More than nginx's worker_shutdown_timeout (10 s): the graceful stop (SIGQUIT, the image's
+    # stop signal) finishes the downloads in flight.
+    stop_grace_period: 15s
+    restart: unless-stopped
+    # Healthy = /readyz is 200, with the base image's BusyBox wget.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+      start_interval: 1s
+
   nginx:
     <<: *hardened
     image: nginxinc/nginx-unprivileged:1.31.7-alpine3.24@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e # yamllint disable-line rule:line-length
@@ -145,11 +165,14 @@ services:
       start_period: 5s
       start_interval: 1s
     # Started, not healthy: nginx routes around a replica that's down (it re-resolves names and
-    # retries the other), so one broken replica mustn't keep the entry point down.
+    # retries the other), so one broken replica mustn't keep the entry point down. The same for
+    # the web UI: without it the game still plays (the bots, make smoke).
     depends_on:
       game-1:
         condition: service_started
       game-2:
+        condition: service_started
+      web:
         condition: service_started
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
