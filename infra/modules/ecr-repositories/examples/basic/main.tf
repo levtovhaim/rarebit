@@ -24,4 +24,16 @@ module "ecr_repositories" {
     "example/service"    = "main"
     "example/pr/service" = "pr"
   }
+
+  push_principals = {
+    main = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci/example-main"]
+    pr   = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci/example-pr"]
+  }
+
+  delete_principals = {
+    main = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/*"]
+    pr   = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci/example-pr"]
+  }
 }
+
+data "aws_caller_identity" "current" {}

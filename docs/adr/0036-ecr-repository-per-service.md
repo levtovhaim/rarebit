@@ -1,6 +1,6 @@
 # 0036. Private ECR repositories per service, separate for main and PR images, with immutable tags and lifecycle rules
 
-- **Status:** accepted
+- **Status:** accepted; who may push to and delete from the main repositories superseded by ADR 0040 (people keep both, as break-glass)
 - **Date:** 2026-11-26
 - **Deciders:** platform owner
 

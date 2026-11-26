@@ -1,11 +1,13 @@
 # Private ECR repositories for the service images (ADR 0036), in two kinds:
-# - "main": `main-<sha7>` images built from main. Only main's CI may push here (the GitHub OIDC PR).
+# - "main": `main-<sha7>` images built from main. Only main's CI role and people may push here (the
+#   repository policy below, ADR 0040).
 # - "pr": `pr-<number>-<sha7>` images built for pull requests, in rarebit/pr/<service>.
 # IAM can limit pushes by repository but not by tag, so the two kinds live in separate repositories:
 # a pull request's job can never put a `main-` tag where deployments pull from.
 
 # Encrypted with the AES256 key ECR manages, at no cost. A customer-managed KMS key would add $1/month
-# and a key policy, and who may pull or push is decided by IAM on the CI and node roles (ADR 0036).
+# and a key policy, and who may pull or push is decided by IAM and the repository policies, not by the
+# key (ADRs 0036, 0040).
 #trivy:ignore:AWS-0033
 resource "aws_ecr_repository" "this" {
   for_each = var.repositories
@@ -43,6 +45,42 @@ resource "aws_ecr_lifecycle_policy" "this" {
 
   repository = each.value.name
   policy     = local.lifecycle_policies[var.repositories[each.key]]
+}
+
+# Who may push and who may delete, per kind, enforced on the repository itself (ADR 0040): a principal
+# whose IAM policy allows more (a broad CI role, say) still can't push a main image. Deny only, so the
+# IAM policies still decide who gets in at all. The Null condition keeps the statements to requests
+# made by a principal: ECR's own lifecycle expiry is never blocked by them. The policy doesn't protect
+# itself: whoever may call ecr:SetRepositoryPolicy (people today, an apply role later) can replace it.
+resource "aws_ecr_repository_policy" "this" {
+  for_each = aws_ecr_repository.this
+
+  repository = each.value.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "OnlyTheseMayPush"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = var.push_principals[var.repositories[each.key]] }
+          Null       = { "aws:PrincipalArn" = "false" }
+        }
+      },
+      {
+        Sid       = "OnlyTheseMayDelete"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["ecr:BatchDeleteImage"]
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = var.delete_principals[var.repositories[each.key]] }
+          Null       = { "aws:PrincipalArn" = "false" }
+        }
+      },
+    ]
+  })
 }
 
 # Scan every image pushed to this account's registry in this region, whatever a repository's own

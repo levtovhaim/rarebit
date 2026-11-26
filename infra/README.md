@@ -1,6 +1,6 @@
 # infra
 
-The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0037).
+The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0040).
 
 ```
 infra/
@@ -8,15 +8,20 @@ infra/
 │   ├── state-bootstrap/     the S3 bucket for Terraform state
 │   │   ├── examples/basic/  the module with plain terraform (plan only)
 │   │   └── tests/           terraform test, AWS mocked
-│   └── ecr-repositories/    the private image registries (main and PR repositories per service)
+│   ├── ecr-repositories/    the private image registries (main and PR repositories per service)
+│   │   ├── examples/basic/  the module with plain terraform (plan only)
+│   │   └── tests/           terraform test, AWS mocked
+│   └── github-oidc/         how CI reaches AWS: the OIDC provider and one role per kind of job
 │       ├── examples/basic/  the module with plain terraform (plan only)
 │       └── tests/           terraform test, AWS mocked
 └── live/                    the only place with real account config
     ├── root.hcl             provider, backend, version constraints: shared by every unit
     └── _global/             the account's foundation, shared by every environment
         ├── env.hcl
+        ├── shared.hcl       repository and CI role names, read by the ecr and github-oidc units (ADR 0039)
         ├── bootstrap/       unit: the state bucket
-        └── ecr/             unit: the image registries ([runbook](../docs/runbooks/ecr.md))
+        ├── ecr/             unit: the image registries ([runbook](../docs/runbooks/ecr.md))
+        └── github-oidc/     unit: the CI roles ([runbook](../docs/runbooks/github-oidc.md))
 ```
 
 A **unit** is a directory under `live/` with a `terragrunt.hcl`. Each unit is its own state file, keyed by its path, so one unit's change can't touch another's resources. Moving a unit means moving its state first ([runbook](../docs/runbooks/terraform-state.md) → Move or rename a unit).
@@ -65,3 +70,4 @@ The state bucket's unit is special the first time: its state starts in a local f
 
 - A module: `versions.tf` with the exact provider version, `variables.tf` and `outputs.tf` with descriptions, `README.md` with the terraform-docs markers, `examples/basic` (with `default_tags`), and tests in `tests/` with `mock_provider`. Then regenerate its table: `terraform-docs --config infra/.terraform-docs.yml infra/modules/<name>`. The provider's lock file goes in the module, its example and every unit that uses it, with hashes for all four platforms (`.claude/skills/dependency-versioning`).
 - A unit: a `terragrunt.hcl` that `include`s `root.hcl`, names its module with `terraform { source = ... }` and passes `inputs`. The backend and provider come from `root.hcl`: don't write them in the unit.
+- Names that more than one `_global` unit needs go in `_global/shared.hcl`, read with `read_terragrunt_config` (ADR 0039). A change there needs a plan and an apply of every unit that reads it.

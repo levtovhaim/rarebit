@@ -1,5 +1,6 @@
 # `terraform test` in the module directory (make infra). The AWS provider is mocked: nothing reaches
-# AWS and no credentials are needed. The lifecycle assertions are the specification of the rules.
+# AWS and no credentials are needed. The lifecycle and repository-policy assertions are the
+# specification of the rules.
 
 mock_provider "aws" {}
 
@@ -7,6 +8,14 @@ variables {
   repositories = {
     "rarebit/game"    = "main"
     "rarebit/pr/game" = "pr"
+  }
+  push_principals = {
+    main = ["arn:aws:iam::000000000000:role/ci/gha-ci-main", "arn:aws:iam::000000000000:user/*"]
+    pr   = ["arn:aws:iam::000000000000:role/ci/gha-ci-pr", "arn:aws:iam::000000000000:user/*"]
+  }
+  delete_principals = {
+    main = ["arn:aws:iam::000000000000:user/*"]
+    pr   = ["arn:aws:iam::000000000000:role/ci/gha-ci-pr", "arn:aws:iam::000000000000:user/*"]
   }
 }
 
@@ -155,4 +164,45 @@ run "rejects_an_unknown_kind" {
   }
 
   expect_failures = [var.repositories]
+}
+
+run "repository_policies_limit_pushes_and_deletes_per_kind" {
+  command = plan
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_ecr_repository_policy.this["rarebit/game"].policy).Statement :
+      s.Effect == "Deny" && s.Principal == "*" && contains(s.Action, "ecr:PutImage") &&
+      s.Condition.ArnNotLike["aws:PrincipalArn"] == ["arn:aws:iam::000000000000:role/ci/gha-ci-main", "arn:aws:iam::000000000000:user/*"]
+    ])
+    error_message = "A main repository denies a push by anyone but the main role and humans."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_ecr_repository_policy.this["rarebit/game"].policy).Statement :
+      s.Effect == "Deny" && contains(s.Action, "ecr:BatchDeleteImage") &&
+      s.Condition.ArnNotLike["aws:PrincipalArn"] == ["arn:aws:iam::000000000000:user/*"]
+    ])
+    error_message = "A main repository denies deleting images to everyone but humans."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_ecr_repository_policy.this["rarebit/pr/game"].policy).Statement :
+      s.Effect == "Deny" && contains(s.Action, "ecr:PutImage") &&
+      contains(s.Condition.ArnNotLike["aws:PrincipalArn"], "arn:aws:iam::000000000000:role/ci/gha-ci-pr") &&
+      !contains(s.Condition.ArnNotLike["aws:PrincipalArn"], "arn:aws:iam::000000000000:role/ci/gha-ci-main")
+    ])
+    error_message = "A PR repository takes pushes from the pr role (and humans), not from the main role."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for p in aws_ecr_repository_policy.this : [
+        for s in jsondecode(p.policy).Statement : s.Effect == "Deny" && s.Condition.Null["aws:PrincipalArn"] == "false"
+      ]
+    ]))
+    error_message = "Repository policies only deny, and only requests that come from a principal (Null aws:PrincipalArn false), so lifecycle expiry is never blocked."
+  }
 }

@@ -35,9 +35,12 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0029](0029-web-security-headers.md) | Send a strict Content-Security-Policy and security headers on every web response | accepted |
 | [0030](0030-rarebit-cli-in-cpp.md) | Write rarebit-cli in C++, judging answers offline with the validator's rules | accepted |
 | [0031](0031-web-image-slim-base-with-pinned-alpine-updates.md) | Build the web image on the slim nginx-unprivileged base, with pinned Alpine security updates | accepted |
-| [0032](0032-terraform-state-in-s3-with-native-locking.md) | Keep Terraform state in one S3 bucket with native locking | accepted |
+| [0032](0032-terraform-state-in-s3-with-native-locking.md) | Keep Terraform state in one S3 bucket with native locking | accepted; locking for pull request plans superseded by 0038 |
 | [0033](0033-terragrunt-live-layer-over-plain-modules.md) | A thin Terragrunt live layer over plain Terraform modules | accepted |
 | [0034](0034-terraform-creates-its-own-state-bucket.md) | Terraform creates its own state bucket: the first apply on local state, then a migration | accepted |
 | [0035](0035-account-id-out-of-git.md) | Keep the AWS account ID out of git: an environment variable locally, a masked secret in CI | accepted |
-| [0036](0036-ecr-repository-per-service.md) | Private ECR repositories per service, separate for main and PR images, with immutable tags and lifecycle rules | accepted |
+| [0036](0036-ecr-repository-per-service.md) | Private ECR repositories per service, separate for main and PR images, with immutable tags and lifecycle rules | accepted; who may push to and delete from the main repositories superseded by 0040 |
 | [0037](0037-no-terragrunt-destroy-in-global.md) | Terragrunt's destroy command never runs in the account's foundation units | accepted |
+| [0038](0038-github-oidc-roles.md) | GitHub Actions reaches AWS through OIDC, with one role per kind of job, trusted by exact claims | accepted |
+| [0039](0039-shared-names-for-global-units.md) | Names that several `_global` units need are written once, in `_global/shared.hcl` | accepted |
+| [0040](0040-ecr-repository-policies.md) | ECR repositories enforce who may push and delete with deny-only repository policies, and people keep both as break-glass | accepted |

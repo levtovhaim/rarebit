@@ -1,6 +1,6 @@
 # 0032. Keep Terraform state in one S3 bucket with native locking
 
-- **Status:** accepted
+- **Status:** accepted; locking for pull request plans superseded by ADR 0038 (they run with `-lock=false`)
 - **Date:** 2026-11-26
 - **Deciders:** platform owner
 

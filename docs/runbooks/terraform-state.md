@@ -135,5 +135,5 @@ If the bucket was lost, so is every other unit's state. Run the bootstrap above,
 - `allowed_account_ids` in every unit's provider and backend, from an account ID that must be exactly 12 digits (ADRs 0033, 0035).
 - Terragrunt's destroy command skips every `_global` unit, also in `run --all` (ADR 0037); `make infra` checks it.
 - `make infra` runs with no AWS credentials, so a test can't reach AWS.
-- CI plans with a role that may read state and take the lock, and nothing else; applies wait for the lock (issue #62).
+- Pull request plans run as `gha-tf-plan` with `-lock=false` (ADR 0038): read-only everywhere, no writes at all, so a pull request can't delete or plant a lock. Applies take the lock and wait for it (`-lock-timeout`, issue #62).
 - Reads and writes of state audited with CloudTrail data events (issue #58).
