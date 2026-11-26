@@ -3,7 +3,7 @@
 - **Alert(s):** none; these show up as a failed workflow step (`aws-actions/configure-aws-credentials`, a push, a plan).
 - **Service:** the GitHub OIDC provider and CI roles from `infra/live/_global/github-oidc` (ADR 0038)
 - **Severity:** ticket (CI is blocked; running environments aren't affected)
-- **Last fired on purpose:** not yet: no workflow uses the roles yet. The trust conditions were checked against seven wrong variants in the module's tests on 2026-11-26.
+- **Last fired on purpose:** not yet: no workflow uses the roles yet. The trust conditions were checked against seven wrong variants in the module's tests on 2026-11-26, and read back from AWS after the first apply the same day.
 
 ## What it means
 
@@ -66,5 +66,5 @@ The job's step `configure-aws-credentials` succeeds. `aws sts get-caller-identit
 
 ## Prevention
 
-- The module's tests specify each role's exact trust and what it may do. IAM Access Analyzer finds nothing in the role policies (ADR 0038).
+- The module's tests specify each role's exact trust and what it may do. IAM Access Analyzer finds nothing in the role permission policies; on the trust policies it warns only about the two pull request roles, an accepted warning (ADR 0038).
 - The apply and teardown roles get GitHub environments with a required reviewer (#62).

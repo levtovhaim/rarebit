@@ -19,7 +19,7 @@
 
 ## Decision
 
-- **An IAM OIDC provider** for GitHub's issuer, with the audience `sts.amazonaws.com`. No thumbprint: AWS checks the issuer's certificate against its own trusted CAs.
+- **An IAM OIDC provider** for GitHub's issuer, with the audience `sts.amazonaws.com`. No thumbprint in the code: AWS checks the issuer's certificate against its own trusted CAs. AWS records a thumbprint on creation anyway, and the plan shows no drift from it.
 - **One role per kind of job,** under the IAM path `/ci/`, with one-hour sessions. Each role's trust policy accepts one exact `sub` and the `aud`, with `StringEquals` only: no `StringLike`, no wildcards.
 
   | Role | Trusted `sub` | What it may do |
@@ -53,6 +53,8 @@
 - **Bad / risks:**
   - **The trust is only as exact as the `sub`.** A job that names an `environment:` gets the environment's `sub`, not `pull_request` or `ref:…`. So PR and main jobs don't use environments, and apply jobs will.
   - **Merge queue runs** (`ref:refs/heads/gh-readonly-queue/main/…`) match neither role. That's by design: main images are pushed after the merge, by main's run.
+  - **Every pull request from a branch here gets the PR roles.** The `pull_request` subject names no branch, so IAM Access Analyzer warns on those two trust policies (`SPECIFIC_GITHUB_REPO_AND_BRANCH_RECOMMENDED`). Accepted: its alternative, a condition on the token's `ref`, would say `refs/pull/<number>/merge`, which every pull request matches. What a PR run can do is what limits it: PR images and a read-only plan.
+  - **`pull_request_target` and `workflow_run` run in the default branch's context** while they can handle a pull request's code. Workflows here don't use them; zizmor's `dangerous-triggers` audit (in `make check`) flags them.
   - **`ReadOnlyAccess` is broad for code from a pull request.** It still reads every resource's configuration. The bucket-side allowlist for state is a follow-up (#62).
   - **Renaming the repository breaks every trust policy:** `shared.hcl` changes with it.
 - **Follow-ups (#62):**
@@ -65,4 +67,4 @@
 
 - A pull request run takes `gha-ci-pr`, pushes to `rarebit/pr/<service>`, and its push to `rarebit/<service>` fails with `explicit deny in a resource-based policy`.
 - A run on main takes `gha-ci-main`; a pull request run trying `gha-ci-main` fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
-- IAM Access Analyzer finds nothing in the role policies (checked on 2026-11-26).
+- IAM Access Analyzer finds nothing in the role permission policies. In the trust policies it finds only the accepted warning above, on the two pull request roles, and a suggestion that the audience is matched without a qualifier, which it is (checked on 2026-11-26 after the first apply). It can't validate ECR repository policies: the module's tests and a read-back from AWS check those.
