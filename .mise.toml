@@ -1,7 +1,7 @@
 # Pinned tool versions for this repo, the same on every machine, agent and CI job.
 # Install them with `mise install` in the repo root (https://mise.jdx.dev).
 # Bump a version only by PR, following .claude/skills/dependency-versioning (7-day publish-age rule).
-# Versions checked on 2026-11-23.
+# Versions checked on 2026-11-23; terraform-docs added on 2026-11-26.
 
 # Oldest mise this file was verified with (mise refuses to run older versions).
 min_version = "2026.11.9"
@@ -17,6 +17,7 @@ terraform = "1.17.2"
 terragrunt = "1.2.2"
 tflint = "0.66.0"
 infracost = "0.10.50"
+"aqua:terraform-docs/terraform-docs" = "0.25.1"
 
 # Kubernetes and GitOps. kubectl tracks the EKS version we target (1.37, standard support).
 kubectl = "1.37.2"
