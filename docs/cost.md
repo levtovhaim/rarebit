@@ -8,7 +8,7 @@ Resources that exist whether or not the platform is up.
 
 | Resource | Unit | Model | Actual |
 |---|---|---|---|
-| Terraform state bucket (S3 Standard, eu-central-1) | `infra/live/_global/bootstrap` | Under $0.01/month. State files are kilobytes, 20 old versions each are kept, and a plan or apply makes a handful of requests. Priced at S3 Standard in Frankfurt, about $0.0245 per GB-month and $0.0054 per 1,000 writes. | — (not applied yet) |
+| Terraform state bucket (S3 Standard, eu-central-1) | `infra/live/_global/bootstrap` | Under $0.01/month. State files are kilobytes, up to 20 old versions of each are kept, and a plan or apply makes a handful of requests (a lock write and delete, a state read, a state write): at S3 Standard rates, well under a cent. | Created 2026-11-26; Cost Explorer actuals from the next day |
 
 ## The platform (hourly, only while up)
 

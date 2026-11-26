@@ -3,7 +3,7 @@
 - **Alert(s):** none; these show up as errors from `terragrunt plan` or `apply`, locally or in CI.
 - **Service:** the infrastructure code: `infra/live` and the state bucket from `infra/live/_global/bootstrap` (ADRs 0032, 0033)
 - **Severity:** ticket (players aren't affected; infrastructure changes are blocked until it's fixed)
-- **Last fired on purpose:** not yet (the stuck-lock drill comes with the CI plan workflow)
+- **Last fired on purpose:** 2026-11-26, "Bootstrap from nothing" for real: the first apply on local state, `init -migrate-state` into the new bucket, then `plan` with `No changes`. The stuck-lock drill comes with the CI plan workflow.
 
 ## What it means
 
