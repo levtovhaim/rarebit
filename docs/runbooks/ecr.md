@@ -16,7 +16,7 @@ Main images (`main-<sha7>`) live in `rarebit/<service>`; PR images (`pr-<number>
 | `ImagePullBackOff` with `403` or `no basic auth credentials` | The node role can't pull: its IAM policy, or the image is in another account or region |
 | `ImagePullBackOff` with `no match for platform in manifest` | The image was built for one CPU architecture (amd64) and the node is another (arm64 spot capacity, say) |
 | `RepositoryNotFoundException` or `name unknown` on push | The repository isn't in `infra/live/_global/ecr/terragrunt.hcl`: a new service needs both its main and its PR entry |
-| `AccessDeniedException` on push from CI | The CI role may not push to this repository: a PR job pushing to a main repository, a policy that doesn't cover it, or the OIDC role wasn't assumed |
+| `AccessDeniedException` on push from CI | The CI role may not push to this repository. `explicit deny in a resource-based policy` means the repository policy refused it: a PR job pushing to a main repository, or a role not in its list. Otherwise the role's IAM policy doesn't cover it, or the OIDC role wasn't assumed ([github-oidc runbook](github-oidc.md)) |
 | `destroy` prints `Early exit … due to exclude block with no_run = true` and exits 0 | Expected: Terragrunt's destroy command skips `_global` units (ADR 0037). Nothing was destroyed. |
 
 ## Impact on players
@@ -79,4 +79,4 @@ Its images get deleted by hand first. **State-changing:** a human runs `aws ecr 
 
 - Promotion keeps every environment within the newest 50 `main` builds, and a protected `release-` tag for promoted images comes with the promotion PR (issue #62).
 - The CI build is to compare digests and the revision label when a tag exists, instead of trusting the tag (#62).
-- PR jobs can push only to the PR repositories (the GitHub OIDC roles, #62).
+- PR jobs can push only to the PR repositories: the CI roles' IAM policies and the main repositories' policies both say so (ADR 0038).

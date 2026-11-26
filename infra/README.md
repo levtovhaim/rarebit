@@ -1,6 +1,6 @@
 # infra
 
-The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0037).
+The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0038).
 
 ```
 infra/
@@ -8,15 +8,18 @@ infra/
 │   ├── state-bootstrap/     the S3 bucket for Terraform state
 │   │   ├── examples/basic/  the module with plain terraform (plan only)
 │   │   └── tests/           terraform test, AWS mocked
-│   └── ecr-repositories/    the private image registries (main and PR repositories per service)
-│       ├── examples/basic/  the module with plain terraform (plan only)
-│       └── tests/           terraform test, AWS mocked
+│   ├── ecr-repositories/    the private image registries (main and PR repositories per service)
+│   │   ├── examples/basic/  the module with plain terraform (plan only)
+│   │   └── tests/           terraform test, AWS mocked
+│   └── github-oidc/         how CI reaches AWS: the OIDC provider and one role per kind of job
 └── live/                    the only place with real account config
     ├── root.hcl             provider, backend, version constraints: shared by every unit
     └── _global/             the account's foundation, shared by every environment
         ├── env.hcl
+        ├── shared.hcl       repository and CI role names, read by the ecr and github-oidc units
         ├── bootstrap/       unit: the state bucket
-        └── ecr/             unit: the image registries ([runbook](../docs/runbooks/ecr.md))
+        ├── ecr/             unit: the image registries ([runbook](../docs/runbooks/ecr.md))
+        └── github-oidc/     unit: the CI roles ([runbook](../docs/runbooks/github-oidc.md))
 ```
 
 A **unit** is a directory under `live/` with a `terragrunt.hcl`. Each unit is its own state file, keyed by its path, so one unit's change can't touch another's resources. Moving a unit means moving its state first ([runbook](../docs/runbooks/terraform-state.md) → Move or rename a unit).

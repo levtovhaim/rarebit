@@ -45,6 +45,41 @@ resource "aws_ecr_lifecycle_policy" "this" {
   policy     = local.lifecycle_policies[var.repositories[each.key]]
 }
 
+# Who may push and who may delete, per kind, enforced on the repository itself: an IAM policy that
+# allows more (a broad CI role, an admin role) still can't push a main image (ADR 0036). Deny only,
+# so the IAM policies still decide who gets in at all. The Null condition keeps the statements to
+# requests made by a principal: ECR's own lifecycle expiry is never blocked by them.
+resource "aws_ecr_repository_policy" "this" {
+  for_each = aws_ecr_repository.this
+
+  repository = each.value.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "OnlyTheseMayPush"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = var.push_principals[var.repositories[each.key]] }
+          Null       = { "aws:PrincipalArn" = "false" }
+        }
+      },
+      {
+        Sid       = "OnlyTheseMayDelete"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["ecr:BatchDeleteImage"]
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = var.delete_principals[var.repositories[each.key]] }
+          Null       = { "aws:PrincipalArn" = "false" }
+        }
+      },
+    ]
+  })
+}
+
 # Scan every image pushed to this account's registry in this region, whatever a repository's own
 # setting says. Registry-level, so one per account and region: use this module once (in _global/ecr).
 resource "aws_ecr_registry_scanning_configuration" "this" {

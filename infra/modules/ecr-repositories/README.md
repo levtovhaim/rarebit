@@ -67,11 +67,14 @@ inputs = {
 | [aws_ecr_lifecycle_policy.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_lifecycle_policy) | resource |
 | [aws_ecr_registry_scanning_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_registry_scanning_configuration) | resource |
 | [aws_ecr_repository.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_repository) | resource |
+| [aws_ecr_repository_policy.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/ecr_repository_policy) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
+| delete\_principals | Per kind (main, pr), the principal ARN patterns that may delete images: everyone else is denied. Lifecycle expiry isn't a principal's request and isn't affected. | `map(list(string))` | n/a | yes |
+| push\_principals | Per kind (main, pr), the principal ARN patterns that may push (aws:PrincipalArn, ArnLike): everyone else is denied by the repository policy, whatever their IAM policies allow. | `map(list(string))` | n/a | yes |
 | repositories | The repositories to create: name => kind. "main" holds main-<sha7> images (e.g. rarebit/game), "pr" holds pr-<number>-<sha7> images (e.g. rarebit/pr/game). Each kind gets its own lifecycle rules. | `map(string)` | n/a | yes |
 
 ## Outputs
