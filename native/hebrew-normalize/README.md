@@ -1,6 +1,6 @@
 # hebrew-normalize
 
-A small C++20 static library that turns a player's answer into a comparison key and decides whether it matches a word-list entry. It has no runtime dependencies. The Go validator calls it through cgo, and the command-line tool will too, so every component compares answers the same way.
+A small C++20 static library that turns a player's answer into a comparison key and decides whether it matches a word-list entry. It has no runtime dependencies. The Go validator calls it through cgo, and [rarebit-cli](../rarebit-cli/README.md) links it directly, so every component compares answers the same way.
 
 ## What it does
 

@@ -13,6 +13,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "RAREBIT_BUILD_TESTS": "ON",
+        "RAREBIT_BUILD_CLI": "ON",
         "RAREBIT_WERROR": "ON"
       }
     },
