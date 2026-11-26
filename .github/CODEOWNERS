@@ -53,7 +53,8 @@
 /.hadolint.yaml            @haimlevtov
 /.shellcheckrc             @haimlevtov
 /zizmor.yml                @haimlevtov
-/.tflint.hcl               @haimlevtov
+/infra/.tflint.hcl         @haimlevtov
+/infra/.terraform-docs.yml @haimlevtov
 /renovate.json             @haimlevtov
 # At any depth: a nested .gitattributes can mark files binary (hiding them from diff-based
 # scans), and a nested .gitignore can change what's ignored

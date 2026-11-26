@@ -60,8 +60,37 @@ run "bucket_is_locked_down" {
   }
 
   assert {
+    condition     = contains(one(aws_s3_bucket_server_side_encryption_configuration.state.rule).blocked_encryption_types, "SSE-C")
+    error_message = "Uploads with a caller-supplied key (SSE-C) must be blocked."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_s3_bucket_policy.state.policy).Statement :
+      s.Effect == "Deny" && s.Principal == "*" && !can(s.Condition) &&
+      length(setsubtract(["s3:DeleteBucket", "s3:DeleteObjectVersion"], try(tolist(s.Action), [s.Action]))) == 0
+    ])
+    error_message = "The bucket policy must deny deleting the bucket and old versions to everyone, unconditionally."
+  }
+
+  assert {
     condition     = one(aws_s3_bucket_lifecycle_configuration.state.rule[0].noncurrent_version_expiration).noncurrent_days == 90
     error_message = "Old state versions are kept 90 days by default."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_lifecycle_configuration.state.rule[0].noncurrent_version_expiration).newer_noncurrent_versions == 20
+    error_message = "The newest 20 old versions of each state file are kept by default, however old."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_lifecycle_configuration.state.rule[0].expiration).expired_object_delete_marker == true
+    error_message = "Delete markers with no versions behind them must be cleaned up."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_lifecycle_configuration.state.rule[0].abort_incomplete_multipart_upload).days_after_initiation == 1
+    error_message = "Incomplete uploads must be aborted after a day."
   }
 }
 
@@ -83,4 +112,24 @@ run "rejects_keeping_old_versions_less_than_a_week" {
   }
 
   expect_failures = [var.noncurrent_version_days]
+}
+
+run "rejects_keeping_no_old_versions" {
+  command = plan
+
+  variables {
+    noncurrent_versions_kept = 0
+  }
+
+  expect_failures = [var.noncurrent_versions_kept]
+}
+
+run "rejects_keeping_more_versions_than_s3_allows" {
+  command = plan
+
+  variables {
+    noncurrent_versions_kept = 101
+  }
+
+  expect_failures = [var.noncurrent_versions_kept]
 }

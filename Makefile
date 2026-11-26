@@ -14,23 +14,43 @@ check: ## Lint the repo with the pre-commit hooks. Run before every commit.
 	pre-commit run --all-files --show-diff-on-failure
 
 # Terraform keeps one copy of each provider here instead of one per directory (the AWS provider is
-# several hundred MB). Terragrunt's own working copies go to TG_DOWNLOAD_DIR (.mise.toml).
+# several hundred MB). make infra's Terragrunt working copies go to INFRA_TG_DOWNLOAD_DIR, apart from
+# the ones real runs use (TG_DOWNLOAD_DIR in .mise.toml), because they're built with a placeholder
+# account ID and no backend.
 TF_PLUGIN_CACHE_DIR ?= $(HOME)/.cache/terraform/plugins
+INFRA_TG_DOWNLOAD_DIR ?= $(HOME)/.cache/terragrunt-make-infra
 
-infra: ## Check infra/ without AWS credentials: validate and test each module (AWS mocked) and its example, render each Terragrunt unit
-	@mkdir -p "$(TF_PLUGIN_CACHE_DIR)"; export TF_PLUGIN_CACHE_DIR="$(TF_PLUGIN_CACHE_DIR)"; \
+# make infra runs with no AWS credentials at all. `terraform test` applies for real unless a test
+# mocks its provider, so a test that forgot the mock fails at provider setup instead of creating
+# resources with whoever's credentials are active.
+NO_AWS_CREDENTIALS = unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
+	AWS_SESSION_TOKEN AWS_SECURITY_TOKEN AWS_ROLE_ARN AWS_WEB_IDENTITY_TOKEN_FILE \
+	AWS_CONTAINER_CREDENTIALS_FULL_URI AWS_CONTAINER_CREDENTIALS_RELATIVE_URI; \
+	export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true
+
+infra: ## Check infra/ with no AWS credentials: validate and test each module (AWS mocked) and its example, validate each Terragrunt unit
+	@$(NO_AWS_CREDENTIALS); \
+	mkdir -p "$(TF_PLUGIN_CACHE_DIR)"; export TF_PLUGIN_CACHE_DIR="$(TF_PLUGIN_CACHE_DIR)"; \
 	for m in infra/modules/*/; do \
 		m="$${m%/}"; echo "== $$m"; \
-		terraform -chdir="$$m" init -backend=false -input=false -no-color >/dev/null; \
+		terraform -chdir="$$m" init -backend=false -input=false -lockfile=readonly -no-color >/dev/null; \
 		terraform -chdir="$$m" validate -no-color; \
 		terraform -chdir="$$m" test -no-color; \
-		terraform -chdir="$$m/examples/basic" init -backend=false -input=false -no-color >/dev/null; \
+		terraform -chdir="$$m/examples/basic" init -backend=false -input=false -lockfile=readonly -no-color >/dev/null; \
 		terraform -chdir="$$m/examples/basic" validate -no-color; \
 	done; \
-	echo "== infra/live (rendered with a placeholder account ID; nothing reaches AWS)"; \
-	for u in $$(find infra/live -name terragrunt.hcl -printf '%h\n' | sort); do \
-		RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt render --working-dir "$$u" --format json >/dev/null; \
-		echo "$$u: renders"; \
+	units="$$(find infra/live -name terragrunt.hcl -not -path '*/.terragrunt-cache/*' -exec dirname {} \; | sort)"; \
+	[ -n "$$units" ] || { echo "make infra: no Terragrunt units found under infra/live" >&2; exit 1; }; \
+	echo "== infra/live (a placeholder account ID, no backend; nothing reaches AWS)"; \
+	export TG_DOWNLOAD_DIR="$(INFRA_TG_DOWNLOAD_DIR)" TG_NON_INTERACTIVE=true TG_LOG_LEVEL=error; \
+	for u in $$units; do \
+		if RAREBIT_AWS_ACCOUNT_ID= terragrunt render --working-dir "$$u" --format json >/dev/null 2>&1; then \
+			echo "make infra: $$u renders with an empty account ID, so its account check would be off" >&2; exit 1; \
+		fi; \
+		RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt run --working-dir "$$u" --no-auto-init -- \
+			init -backend=false -input=false -lockfile=readonly -no-color >/dev/null; \
+		RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt run --working-dir "$$u" --no-auto-init -- validate -no-color >/dev/null; \
+		echo "$$u: valid (and refuses an empty account ID)"; \
 	done
 
 # The CMake preset for this OS (native/CMakePresets.json): Windows sets OS=Windows_NT, macOS

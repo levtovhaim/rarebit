@@ -7,9 +7,10 @@ terragrunt_version_constraint = "~> 1.2"
 
 locals {
   # The one AWS account every unit may run in. It isn't committed (the repo is public): set it in
-  # .mise.local.toml, which git ignores (infra/README.md). get_env without a default fails when the
-  # variable is unset, so no unit runs without it.
-  account_id = get_env("RAREBIT_AWS_ACCOUNT_ID")
+  # .mise.local.toml, which git ignores (infra/README.md; ADR 0035). get_env without a default fails
+  # when the variable is unset, and regex fails unless it's exactly 12 digits. An empty value must
+  # fail too: allowed_account_ids = [""] turns the provider's account check off.
+  account_id = regex("^[0-9]{12}$", get_env("RAREBIT_AWS_ACCOUNT_ID"))
   region     = "eu-central-1"
 
   # The environment comes from the env.hcl of the directory the unit sits in (_global, later dev, prod).
@@ -18,7 +19,7 @@ locals {
   # Bucket names are global across AWS: the account ID and region make this one ours (ADR 0032).
   state_bucket = "rarebit-tfstate-${local.account_id}-${local.region}"
 
-  # The owner from the service catalog (catalog/README.md).
+  # Who owns the infrastructure, in the service catalog's owner format (catalog/README.md).
   owner = "user:haimlevtov"
 }
 
@@ -47,7 +48,8 @@ generate "provider" {
 }
 
 # Every unit's state: one file per unit in the state bucket, named by the unit's path, locked by a
-# lockfile next to it (ADR 0032). Terragrunt never creates or changes the bucket: the module owns it.
+# lockfile next to it (ADR 0032). Terragrunt never creates or changes the bucket: the module owns it
+# (ADR 0034).
 remote_state {
   backend = "s3"
 

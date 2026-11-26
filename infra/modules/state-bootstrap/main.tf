@@ -2,8 +2,9 @@
 # conditional writes: a `<key>.tflock` object next to each state file, so there's no DynamoDB table.
 
 # No S3 server access logs: they need a second bucket (which would need its own logging), and S3
-# delivers them best-effort. Who read or wrote state is audited with CloudTrail data events instead
-# (ADR 0032).
+# delivers them best-effort. Reads and writes of state will be audited with CloudTrail data events
+# instead (issue #58); until then nothing records them. Changes to the bucket's own settings are
+# already in CloudTrail's management events (ADR 0032).
 #trivy:ignore:AWS-0089
 resource "aws_s3_bucket" "state" {
   bucket = var.bucket_name
@@ -41,10 +42,16 @@ resource "aws_s3_bucket_versioning" "state" {
   versioning_configuration {
     status = "Enabled"
   }
+
+  # Destroying this resource suspends versioning, and then a bad write can't be undone. That happens
+  # by accident when the resource is renamed without a `moved` block, so a plan that would do it fails.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # SSE-S3 (AES256): S3 holds the key, at no cost. A customer-managed KMS key would cost $1/month and
-# add a key policy to get right, and IAM on the bucket already decides who reads state (ADR 0032).
+# add a key policy to get right, and IAM policies already decide who reads state (ADR 0032).
 #trivy:ignore:AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
@@ -53,6 +60,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
+
+    # No uploads encrypted with a key the caller supplies (SSE-C): whoever holds that key could
+    # overwrite state with versions nobody else can read. S3 blocks SSE-C on new buckets by default;
+    # this keeps it blocked whatever the default becomes.
+    blocked_encryption_types = ["SSE-C"]
   }
 }
 
@@ -71,7 +83,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
       newer_noncurrent_versions = var.noncurrent_versions_kept
     }
 
-    # A released lock leaves a delete marker; once its old versions expire, the marker goes too.
+    # A released lock leaves a delete marker. S3 removes a marker only once no older versions remain
+    # behind it, and the newest noncurrent_versions_kept of every key always stay, so each lock key
+    # keeps about that many old lock objects and markers: a few kilobytes.
     expiration {
       expired_object_delete_marker = true
     }
@@ -85,7 +99,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
   depends_on = [aws_s3_bucket_versioning.state]
 }
 
-# TLS only, and TLS 1.2 or later. State files hold resource IDs and sometimes secrets in outputs.
+# TLS only, TLS 1.2 or later, and nobody deletes the bucket or its history. State files hold resource
+# IDs, and sometimes secrets in outputs.
 resource "aws_s3_bucket_policy" "state" {
   bucket = aws_s3_bucket.state.id
 
@@ -108,9 +123,26 @@ resource "aws_s3_bucket_policy" "state" {
         Resource  = [aws_s3_bucket.state.arn, "${aws_s3_bucket.state.arn}/*"]
         Condition = { NumericLessThan = { "s3:TlsVersion" = "1.2" } }
       },
+      # Old state versions are the only way back from a bad write, so no person, role or tool may
+      # delete them, or the bucket. Lifecycle expiry still works: S3 doesn't check bucket policies
+      # for lifecycle actions. Terraform releases a lock with a plain DeleteObject (a delete marker),
+      # which this doesn't block. To delete the bucket on purpose, remove this statement first, in a
+      # reviewed PR; the account's root user can always remove the policy.
+      {
+        Sid       = "DenyDeletingTheBucketOrItsHistory"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:DeleteBucket", "s3:DeleteObjectVersion"]
+        Resource  = [aws_s3_bucket.state.arn, "${aws_s3_bucket.state.arn}/*"]
+      },
     ]
   })
 
   # Applied after the public access block, so the bucket is never briefly without either.
   depends_on = [aws_s3_bucket_public_access_block.state]
+
+  # Destroying the policy would drop the TLS and delete guards along with it.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
