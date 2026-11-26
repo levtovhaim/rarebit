@@ -150,7 +150,8 @@ services:
 
   nginx:
     <<: *hardened
-    image: nginxinc/nginx-unprivileged:1.31.7-alpine3.24@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e # yamllint disable-line rule:line-length
+    # The web image's base (apps/web/Dockerfile), slim: no curl, no optional modules.
+    image: nginxinc/nginx-unprivileged:1.31.7-alpine3.24-slim@sha256:a8cb0f33d51fa107c96fd2bd3a71aaf564ec131e9d2bdf8700944f0ed8b170d7 # yamllint disable-line rule:line-length
     # nginx itself, not the image's entrypoint scripts: they rewrite files under /etc/nginx,
     # which a read-only filesystem doesn't allow.
     entrypoint: ["nginx", "-g", "daemon off;"]

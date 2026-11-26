@@ -11,7 +11,7 @@
 set -euo pipefail
 
 image="${1:?usage: bash image-smoke.sh <image>}"
-max_mb="${MAX_IMAGE_MB:-64}" # unpacked: the base is 54.5 MB, the UI's files 2.5 MB
+max_mb="${MAX_IMAGE_MB:-24}" # unpacked: the slim base is 12.8 MB, the UI's files 2.5 MB
 id="rarebit-web-smoke-$$"
 year=31536000
 download=""

@@ -48,8 +48,9 @@ RUN --network=none { expr "$GIT_SHA" : '[0-9a-f]\{7\}$' >/dev/null \
 
 # distroless nodejs26: Node 26.13.1 and the libraries it loads (glibc, libstdc++, OpenSSL, CA
 # certificates, tzdata); no shell, no npm, no package manager. Its entrypoint is
-# /nodejs/bin/node; the nonroot variant's user is 65532. This build: 2026-11-12.
-FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:1d736cf8b5716c07a245301f92717143215d248fd55771ee1936ef4b3302e531
+# /nodejs/bin/node; the nonroot variant's user is 65532. This build: 2026-11-25, younger than the
+# 7-day rule allows, for a security fix (libzstd1, CVE-2026-124851).
+FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:a84242e747fbb5aaaa0180c273b6f7130ca34b3300082192ef58eea96089eb3c
 
 ARG GIT_SHA
 LABEL org.opencontainers.image.source="https://github.com/levtovhaim/rarebit" \

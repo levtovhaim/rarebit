@@ -49,7 +49,7 @@ The stack's game accepts `http://localhost:5173`. The dev server sends none of t
 
 ## The image
 
-`apps/web/Dockerfile` ([ADR 0027](../../docs/adr/0027-web-image-nginx-any-path.md)): `vite build` in the Node builder, then nginx-unprivileged serving `/srv/web` with [nginx.conf](nginx.conf).
+`apps/web/Dockerfile` ([ADR 0027](../../docs/adr/0027-web-image-nginx-any-path.md)): `vite build` in the Node builder, then nginx-unprivileged serving `/srv/web` with [nginx.conf](nginx.conf). The base is the slim variant (no curl, no optional nginx modules), plus pinned Alpine security updates it doesn't have yet ([ADR 0031](../../docs/adr/0031-web-image-slim-base-with-pinned-alpine-updates.md)); the image is about 15 MB unpacked.
 
 - **How it runs:** nginx is PID 1, as uid 101, with one worker.
   - The root filesystem is read-only; only `/tmp` is writable (a tmpfs, or an emptyDir in Kubernetes).
