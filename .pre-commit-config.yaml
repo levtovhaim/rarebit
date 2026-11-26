@@ -101,4 +101,33 @@ repos:
         name: terraform fmt
         entry: bash -c 'rc=0; for f in "$@"; do terraform fmt -check -diff "$f" || rc=1; done; exit $rc' --
         language: system
-        files: \.(tf|tfvars)$
+        files: \.(tf|tfvars|tftest\.hcl)$
+      - id: terragrunt-hcl-format
+        name: terragrunt hcl format
+        entry: bash -c 'rc=0; for f in "$@"; do terragrunt hcl format --check --diff --file "$f" || rc=1; done; exit $rc' --
+        language: system
+        files: ^infra/live/.*\.hcl$
+      - id: tflint
+        name: tflint (infra/)
+        # --init installs the pinned AWS ruleset once (from GitHub); later runs find it in ~/.tflint.d.
+        entry: bash -c 'cd infra && tflint --init --config="$PWD/.tflint.hcl" >/dev/null && tflint --recursive --config="$PWD/.tflint.hcl"'
+        language: system
+        files: ^infra/.*(\.tf|\.tflint\.hcl)$
+        pass_filenames: false
+      - id: trivy-config
+        name: trivy config (infra/ misconfigurations)
+        # Every severity fails the hook. An accepted finding gets a `#trivy:ignore:<ID>` comment
+        # with its reason above the resource.
+        entry: trivy config --quiet --exit-code 1 --skip-dirs '**/.terraform' infra
+        language: system
+        files: ^infra/
+        pass_filenames: false
+      - id: terraform-docs
+        name: terraform-docs (module READMEs up to date)
+        entry: >-
+          bash -c 'rc=0; for m in infra/modules/*/; do
+          terraform-docs --config infra/.terraform-docs.yml --output-check "$m" >/dev/null 2>&1 ||
+          { echo "out of date: ${m}README.md. Run: terraform-docs --config infra/.terraform-docs.yml $m"; rc=1; }; done; exit $rc'
+        language: system
+        files: ^infra/(modules/|\.terraform-docs\.yml$)
+        pass_filenames: false

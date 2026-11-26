@@ -5,13 +5,33 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web web-image web-image-smoke up smoke down kind-up kind-down
+.PHONY: help check infra native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web web-image web-image-smoke up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
 
 check: ## Lint the repo with the pre-commit hooks. Run before every commit.
 	pre-commit run --all-files --show-diff-on-failure
+
+# Terraform keeps one copy of each provider here instead of one per directory (the AWS provider is
+# several hundred MB). Terragrunt's own working copies go to TG_DOWNLOAD_DIR (.mise.toml).
+TF_PLUGIN_CACHE_DIR ?= $(HOME)/.cache/terraform/plugins
+
+infra: ## Check infra/ without AWS credentials: validate and test each module (AWS mocked) and its example, render each Terragrunt unit
+	@mkdir -p "$(TF_PLUGIN_CACHE_DIR)"; export TF_PLUGIN_CACHE_DIR="$(TF_PLUGIN_CACHE_DIR)"; \
+	for m in infra/modules/*/; do \
+		m="$${m%/}"; echo "== $$m"; \
+		terraform -chdir="$$m" init -backend=false -input=false -no-color >/dev/null; \
+		terraform -chdir="$$m" validate -no-color; \
+		terraform -chdir="$$m" test -no-color; \
+		terraform -chdir="$$m/examples/basic" init -backend=false -input=false -no-color >/dev/null; \
+		terraform -chdir="$$m/examples/basic" validate -no-color; \
+	done; \
+	echo "== infra/live (rendered with a placeholder account ID; nothing reaches AWS)"; \
+	for u in $$(find infra/live -name terragrunt.hcl -printf '%h\n' | sort); do \
+		RAREBIT_AWS_ACCOUNT_ID=000000000000 terragrunt render --working-dir "$$u" --format json >/dev/null; \
+		echo "$$u: renders"; \
+	done
 
 # The CMake preset for this OS (native/CMakePresets.json): Windows sets OS=Windows_NT, macOS
 # reports Darwin, anything else (Linux, WSL) uses GCC. Override it, e.g. for the sanitizer

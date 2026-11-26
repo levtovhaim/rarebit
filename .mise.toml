@@ -10,6 +10,10 @@ min_version = "2026.11.9"
 # The project's AWS account. Inside this repo nothing falls back to a `default` profile.
 AWS_PROFILE = "rarebit"
 AWS_REGION = "eu-central-1"
+# Terragrunt's working copies of the modules, outside the checkout: on a Windows drive mounted into
+# WSL (/mnt/c, /mnt/d), Terragrunt can't replace its own read-only generated files, and the Linux
+# filesystem is much faster for provider binaries (infra/README.md).
+TG_DOWNLOAD_DIR = "{{env.HOME}}/.cache/terragrunt"
 
 [tools]
 # Infrastructure as code

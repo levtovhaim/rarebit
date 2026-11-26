@@ -35,3 +35,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0029](0029-web-security-headers.md) | Send a strict Content-Security-Policy and security headers on every web response | accepted |
 | [0030](0030-rarebit-cli-in-cpp.md) | Write rarebit-cli in C++, judging answers offline with the validator's rules | accepted |
 | [0031](0031-web-image-slim-base-with-pinned-alpine-updates.md) | Build the web image on the slim nginx-unprivileged base, with pinned Alpine security updates | accepted |
+| [0032](0032-terraform-state-in-s3-with-native-locking.md) | Keep Terraform state in one S3 bucket with native locking, created by Terraform itself | accepted |
+| [0033](0033-terragrunt-live-layer-over-plain-modules.md) | A thin Terragrunt live layer over plain Terraform modules | accepted |
