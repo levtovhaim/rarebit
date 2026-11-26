@@ -1,5 +1,6 @@
 # `terraform test` in the module directory (make infra). The AWS provider is mocked: nothing reaches
-# AWS and no credentials are needed. The lifecycle assertions are the specification of the rules.
+# AWS and no credentials are needed. The lifecycle and repository-policy assertions are the
+# specification of the rules.
 
 mock_provider "aws" {}
 

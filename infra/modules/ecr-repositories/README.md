@@ -2,7 +2,7 @@
 
 Private ECR repositories for the service images (ADR 0036), in two kinds, given as `name => kind`:
 
-- **`main`**, e.g. `rarebit/game`: `main-<sha7>` images from `main`. Only main's CI may push here (the GitHub OIDC roles), and deployments pull from here.
+- **`main`**, e.g. `rarebit/game`: `main-<sha7>` images from `main`. Only main's CI role and people may push here, enforced by this module's repository policy (ADR 0040), and deployments pull from here.
 - **`pr`**, e.g. `rarebit/pr/game`: `pr-<number>-<sha7>` images for pull requests. IAM can limit pushes by repository but not by tag, so this split is what keeps a PR job from planting a `main-` tag.
 
 Every repository:
@@ -11,6 +11,7 @@ Every repository:
 - **Scanning:** basic (free) on every push, set at the registry level for every repository (`aws_ecr_registry_scanning_configuration`, one per account and region, so use this module once), and per repository as a fallback.
 - **Encryption:** AES256 with the key ECR manages. Not a customer-managed KMS key: ADR 0036 says why.
 - **Deletion:** `prevent_destroy` and `force_delete = false`, so Terraform refuses to delete a repository, empty or not.
+- **Repository policy** (ADR 0040): deny only. Per kind, pushes are refused to everyone but `push_principals`, and deletes to everyone but `delete_principals`, whatever their IAM policies allow. Requests without a principal, like ECR's lifecycle expiry, aren't affected.
 
 **Lifecycle rules, per kind:**
 
@@ -41,10 +42,20 @@ inputs = {
     "rarebit/game"    = "main"
     "rarebit/pr/game" = "pr"
   }
+
+  # ARN patterns (aws:PrincipalArn, ArnLike); the real unit builds them from shared.hcl.
+  push_principals = {
+    main = ["arn:aws:iam::<account>:role/ci/gha-ci-main", "arn:aws:iam::<account>:user/*"]
+    pr   = ["arn:aws:iam::<account>:role/ci/gha-ci-pr", "arn:aws:iam::<account>:user/*"]
+  }
+  delete_principals = {
+    main = ["arn:aws:iam::<account>:user/*"]
+    pr   = ["arn:aws:iam::<account>:role/ci/gha-ci-pr", "arn:aws:iam::<account>:user/*"]
+  }
 }
 ```
 
-[`examples/basic`](examples/basic) shows it with plain Terraform (plan only). `make infra` validates the module and runs its tests (`tests/`) against a mocked AWS provider, with no credentials. The lifecycle assertions there are the specification of the rules.
+[`examples/basic`](examples/basic) shows it with plain Terraform (plan only). `make infra` validates the module and runs its tests (`tests/`) against a mocked AWS provider, with no credentials. The lifecycle and repository-policy assertions there are the specification of the rules.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements

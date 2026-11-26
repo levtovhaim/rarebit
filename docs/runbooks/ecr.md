@@ -1,7 +1,7 @@
 # Runbook: an image can't be pushed or pulled
 
 - **Alert(s):** none yet; these show up as a failed CI push, or pods in `ImagePullBackOff`.
-- **Service:** the image registries from `infra/live/_global/ecr` (ADRs 0036, 0037)
+- **Service:** the image registries from `infra/live/_global/ecr` (ADRs 0036, 0037, 0040)
 - **Severity:** page when a running environment can't pull its image, ticket for a failed CI push
 - **Last fired on purpose:** 2026-11-26, the destroy guard: `terragrunt run -- destroy`, the `destroy` shortcut and `run --all -- destroy` all left the `_global` units alone, and `make infra` fails when the guard is removed. Push and pull failures haven't been exercised: no images exist yet.
 
@@ -15,8 +15,9 @@ Main images (`main-<sha7>`) live in `rarebit/<service>`; PR images (`pr-<number>
 | `ImagePullBackOff` with `not found` or `manifest unknown` | The tag doesn't exist (anymore): a `pr-` image older than 7 days, a `main-` image more than 50 builds old, or a wrong tag in the deploy values |
 | `ImagePullBackOff` with `403` or `no basic auth credentials` | The node role can't pull: its IAM policy, or the image is in another account or region |
 | `ImagePullBackOff` with `no match for platform in manifest` | The image was built for one CPU architecture (amd64) and the node is another (arm64 spot capacity, say) |
-| `RepositoryNotFoundException` or `name unknown` on push | The repository isn't in `infra/live/_global/ecr/terragrunt.hcl`: a new service needs both its main and its PR entry |
-| `AccessDeniedException` on push from CI | The CI role may not push to this repository. `explicit deny in a resource-based policy` means the repository policy refused it: a PR job pushing to a main repository, or a role not in its list. Otherwise the role's IAM policy doesn't cover it, or the OIDC role wasn't assumed ([github-oidc runbook](github-oidc.md)) |
+| `RepositoryNotFoundException` or `name unknown` on push | The repository isn't in `ecr_repositories` in `infra/live/_global/shared.hcl`: a new service needs its main and its PR entry, then an apply of `_global/ecr` and of `_global/github-oidc`, so the CI roles may push to it (ADR 0039) |
+| `AccessDeniedException` on push from CI | The CI role may not push to this repository. A refused push usually fails first on `ecr:InitiateLayerUpload`, not `PutImage`. `explicit deny in a resource-based policy` means the repository policy refused it: a PR job pushing to a main repository, or a role not in its list (ADR 0040). `no identity-based policy allows` means the role's IAM policy doesn't cover the repository: a new service whose `github-oidc` unit wasn't applied yet. Otherwise the OIDC role wasn't assumed ([github-oidc runbook](github-oidc.md)) |
+| `AccessDeniedException` on `BatchDeleteImage` | The repository policy allows deletes only to `delete_principals` (ADR 0040): in a main repository, IAM users only. A person working through an assumed role, or a PR cleanup job pointed at a main repository, is refused. Main images normally go by the lifecycle rules; a person deletes one by hand as their IAM user |
 | `destroy` prints `Early exit … due to exclude block with no_run = true` and exits 0 | Expected: Terragrunt's destroy command skips `_global` units (ADR 0037). Nothing was destroyed. |
 
 ## Impact on players
@@ -61,7 +62,7 @@ If the digest matches, nothing to fix: the image for that commit is already ther
 
 Deletion is guarded three ways: `prevent_destroy` in the module, `force_delete = false`, and Terragrunt's destroy guard for `_global` (ADR 0037). Deleting one on purpose takes a reviewed PR that:
 
-1. removes it from the unit's list;
+1. removes it from `ecr_repositories` in `infra/live/_global/shared.hcl`, and plans both `_global/ecr` and `_global/github-oidc`;
 2. lifts `prevent_destroy` for that one apply.
 
 Its images get deleted by hand first. **State-changing:** a human runs `aws ecr batch-delete-image` and the apply (rule 2).
@@ -79,4 +80,4 @@ Its images get deleted by hand first. **State-changing:** a human runs `aws ecr 
 
 - Promotion keeps every environment within the newest 50 `main` builds, and a protected `release-` tag for promoted images comes with the promotion PR (issue #62).
 - The CI build is to compare digests and the revision label when a tag exists, instead of trusting the tag (#62).
-- PR jobs can push only to the PR repositories: the CI roles' IAM policies and the main repositories' policies both say so (ADR 0038).
+- PR jobs can push only to the PR repositories: the CI roles' IAM policies (ADR 0038) and the main repositories' policies (ADR 0040) both say so.
