@@ -79,7 +79,7 @@ That ends the game for its players, so it's state-changing: in a shared environm
 
 - `curl -s <pod>/readyz` returns `{"status":"ready"}`.
 - `ZRANGEBYSCORE rb:deadlines -inf <now - 15 s>` is empty.
-- A bot game finishes: the synthetic game, once the bots exist.
+- A bot game finishes: the bots' synthetic game against the environment ([apps/bots](../../apps/bots/README.md); locally, `make smoke`).
 
 ## Roll back or escalate
 
