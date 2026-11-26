@@ -22,11 +22,13 @@ data "aws_caller_identity" "current" {}
 module "github_oidc" {
   source = "../.."
 
-  github_repository = "example-org/example-repo"
-  account_id        = data.aws_caller_identity.current.account_id
-  region            = "eu-central-1"
-  roles             = { pr = "example-ci-pr", main = "example-ci-main", tf_plan = "example-tf-plan" }
-  main_repositories = ["example/service"]
-  pr_repositories   = ["example/pr/service"]
-  state_bucket      = "example-tfstate"
+  github_repository    = "example-org/example-repo"
+  github_owner_id      = "1001"
+  github_repository_id = "2002"
+  account_id           = data.aws_caller_identity.current.account_id
+  region               = "eu-central-1"
+  roles                = { pr = "example-ci-pr", main = "example-ci-main", tf_plan = "example-tf-plan" }
+  main_repositories    = ["example/service"]
+  pr_repositories      = ["example/pr/service"]
+  state_bucket         = "example-tfstate"
 }

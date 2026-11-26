@@ -16,12 +16,14 @@ terraform {
 }
 
 inputs = {
-  github_repository = local.shared.github_repository
-  account_id        = include.root.locals.account_id
-  region            = include.root.locals.region
-  role_path         = local.shared.ci_role_path
-  roles             = local.shared.ci_roles
-  main_repositories = [for name, kind in local.shared.ecr_repositories : name if kind == "main"]
-  pr_repositories   = [for name, kind in local.shared.ecr_repositories : name if kind == "pr"]
-  state_bucket      = include.root.locals.state_bucket
+  github_repository    = local.shared.github_repository
+  github_owner_id      = local.shared.github_owner_id
+  github_repository_id = local.shared.github_repository_id
+  account_id           = include.root.locals.account_id
+  region               = include.root.locals.region
+  role_path            = local.shared.ci_role_path
+  roles                = local.shared.ci_roles
+  main_repositories    = [for name, kind in local.shared.ecr_repositories : name if kind == "main"]
+  pr_repositories      = [for name, kind in local.shared.ecr_repositories : name if kind == "pr"]
+  state_bucket         = include.root.locals.state_bucket
 }

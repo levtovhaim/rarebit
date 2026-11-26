@@ -22,6 +22,11 @@ locals {
     tf_plan = "gha-tf-plan" # pull requests: terraform plan, read-only
   }
 
-  # The repository on GitHub whose workflows may take these roles.
-  github_repository = "levtovhaim/rarebit"
+  # The repository on GitHub whose workflows may take these roles, with the numeric IDs GitHub puts
+  # in its tokens' sub (immutable subject, ADR 0038). They're public: gh api repos/levtovhaim/rarebit
+  # → .owner.id and .id. A rename changes the name part of the sub (update github_repository); a
+  # repository deleted and created again gets a new ID.
+  github_repository    = "levtovhaim/rarebit"
+  github_owner_id      = "360220203"
+  github_repository_id = "1468801318"
 }

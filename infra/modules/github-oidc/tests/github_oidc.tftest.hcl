@@ -13,13 +13,15 @@ mock_provider "aws" {
 }
 
 variables {
-  github_repository = "example-org/example-repo"
-  account_id        = "000000000000"
-  region            = "eu-central-1"
-  roles             = { pr = "gha-ci-pr", main = "gha-ci-main", tf_plan = "gha-tf-plan" }
-  main_repositories = ["rarebit/game"]
-  pr_repositories   = ["rarebit/pr/game"]
-  state_bucket      = "test-tfstate"
+  github_repository    = "example-org/example-repo"
+  github_owner_id      = "1001"
+  github_repository_id = "2002"
+  account_id           = "000000000000"
+  region               = "eu-central-1"
+  roles                = { pr = "gha-ci-pr", main = "gha-ci-main", tf_plan = "gha-tf-plan" }
+  main_repositories    = ["rarebit/game"]
+  pr_repositories      = ["rarebit/pr/game"]
+  state_bucket         = "test-tfstate"
 }
 
 run "the_provider_trusts_github_actions_for_sts" {
@@ -66,19 +68,21 @@ run "each_role_trusts_exactly_one_kind_of_run" {
     error_message = "Every role requires the token's audience (aud) to be sts.amazonaws.com."
   }
 
+  # GitHub's immutable subject: repo:<owner>@<owner-id>/<name>@<repository-id>:<context>. The
+  # name-only form (repo:<owner>/<name>:...) never matches a token of this repository.
   assert {
-    condition     = try(jsondecode(aws_iam_role.this["pr"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == "repo:example-org/example-repo:pull_request"
-    error_message = "The pr role: only pull_request runs of this repository (sub = repo:<owner>/<name>:pull_request)."
+    condition     = try(jsondecode(aws_iam_role.this["pr"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == "repo:example-org@1001/example-repo@2002:pull_request"
+    error_message = "The pr role: only pull_request runs of this repository (sub = repo:<owner>@<owner-id>/<name>@<repository-id>:pull_request)."
   }
 
   assert {
-    condition     = try(jsondecode(aws_iam_role.this["main"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == "repo:example-org/example-repo:ref:refs/heads/main"
-    error_message = "The main role: only runs for the main branch of this repository (sub = repo:<owner>/<name>:ref:refs/heads/main)."
+    condition     = try(jsondecode(aws_iam_role.this["main"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == "repo:example-org@1001/example-repo@2002:ref:refs/heads/main"
+    error_message = "The main role: only runs for the main branch of this repository (sub = repo:<owner>@<owner-id>/<name>@<repository-id>:ref:refs/heads/main)."
   }
 
   assert {
-    condition     = try(jsondecode(aws_iam_role.this["tf_plan"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == "repo:example-org/example-repo:pull_request"
-    error_message = "The tf_plan role: only pull_request runs of this repository."
+    condition     = try(jsondecode(aws_iam_role.this["tf_plan"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == "repo:example-org@1001/example-repo@2002:pull_request"
+    error_message = "The tf_plan role: only pull_request runs of this repository (sub = repo:<owner>@<owner-id>/<name>@<repository-id>:pull_request)."
   }
 }
 
@@ -118,7 +122,7 @@ run "each_role_may_do_only_its_job" {
         ])
       ]
     ]))
-    error_message = "No CI role may change IAM, repository policies, lifecycle rules, tag mutability, scanning or replication, or use a * action."
+    error_message = "No CI role's inline policy may change IAM, repository policies, lifecycle rules, tag mutability, scanning or replication, or allow a * action."
   }
 
   assert {
@@ -130,37 +134,98 @@ run "each_role_may_do_only_its_job" {
   }
 
   assert {
-    condition     = aws_iam_role_policy_attachment.tf_plan_read_only.policy_arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
-    error_message = "The tf_plan role reads through ReadOnlyAccess."
-  }
-
-  assert {
-    condition = anytrue([
-      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
-      s.Effect == "Allow" && s.Resource == "arn:aws:s3:::test-tfstate/*.tflock"
-    ])
-    error_message = "The tf_plan role may write only lock objects in the state bucket."
-  }
-
-  assert {
-    condition = anytrue([
-      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
-      s.Effect == "Deny" && contains(flatten([s.Action]), "secretsmanager:GetSecretValue") && contains(flatten([s.Action]), "ssm:GetParameter")
-    ])
-    error_message = "The tf_plan role can't read secret values: a plan runs the pull request's own code."
-  }
-
-  assert {
     condition     = alltrue([for r in aws_iam_role.this : r.path == "/ci/" && r.max_session_duration == 3600])
     error_message = "The roles are under /ci/, with one-hour sessions."
   }
 }
 
-run "rejects_missing_or_extra_roles" {
+run "the_plan_role_reads_configuration_and_writes_nothing" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role_policy_attachment.tf_plan_read_only.policy_arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    error_message = "The tf_plan role reads through ReadOnlyAccess."
+  }
+
+  assert {
+    condition     = alltrue([for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement : s.Effect == "Deny"])
+    error_message = "The tf_plan role's inline policy only denies: it writes nothing, not even a lock (PR plans run with -lock=false)."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Resource == "*" && contains(flatten([s.Action]), "secretsmanager:GetSecretValue") && contains(flatten([s.Action]), "kms:Decrypt")
+    ])
+    error_message = "The tf_plan role can't read secret values: whoever opens a pull request controls the code that runs with it."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Resource == "arn:aws:ssm:*:000000000000:parameter/*" && contains(flatten([s.Action]), "ssm:GetParametersByPath")
+    ])
+    error_message = "The tf_plan role can't read this account's SSM parameter values; AWS's public parameters stay readable."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Resource == "*" && length(setsubtract(["account:*", "billing:*", "budgets:*", "ce:*", "invoicing:*", "payments:*", "tax:*"], flatten([s.Action]))) == 0
+    ])
+    error_message = "The tf_plan role can't read the account owner's contact, payment, tax or budget details, or call Cost Explorer (billed per request)."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Resource == "*" && length(setsubtract(["sqs:ReceiveMessage", "logs:StartQuery", "logs:GetLogEvents", "dynamodb:Scan", "cloudwatch:GetMetricData"], flatten([s.Action]))) == 0
+    ])
+    error_message = "The tf_plan role can't read data (messages, logs, table items, metrics): a plan needs configuration only."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Action == "s3:GetObject*" && try(s.NotResource, "") == "arn:aws:s3:::test-tfstate/*"
+    ])
+    error_message = "The tf_plan role reads objects only in the state bucket."
+  }
+}
+
+run "each_role_has_exactly_its_policies" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for k, e in aws_iam_role_policies_exclusive.this : e.policy_names == toset(["permissions"])])
+    error_message = "Each role has exactly one inline policy, permissions: anything added outside Terraform shows up in the plan."
+  }
+
+  assert {
+    condition = (
+      aws_iam_role_policy_attachments_exclusive.this["tf_plan"].policy_arns == toset(["arn:aws:iam::aws:policy/ReadOnlyAccess"]) &&
+      length(aws_iam_role_policy_attachments_exclusive.this["pr"].policy_arns) == 0 &&
+      length(aws_iam_role_policy_attachments_exclusive.this["main"].policy_arns) == 0
+    )
+    error_message = "Only the tf_plan role has a managed policy (ReadOnlyAccess); a managed policy attached outside Terraform shows up in the plan."
+  }
+}
+
+run "rejects_a_missing_role" {
   command = plan
 
   variables {
     roles = { pr = "gha-ci-pr", main = "gha-ci-main" }
+  }
+
+  expect_failures = [var.roles]
+}
+
+run "rejects_an_extra_role" {
+  command = plan
+
+  variables {
+    roles = { pr = "gha-ci-pr", main = "gha-ci-main", tf_plan = "gha-tf-plan", apply = "gha-tf-apply" }
   }
 
   expect_failures = [var.roles]
@@ -174,4 +239,55 @@ run "rejects_an_invalid_account_id" {
   }
 
   expect_failures = [var.account_id]
+}
+
+run "rejects_a_repository_without_its_owner" {
+  command = plan
+
+  variables {
+    github_repository = "example-repo"
+  }
+
+  expect_failures = [var.github_repository]
+}
+
+run "rejects_non_numeric_github_ids" {
+  command = plan
+
+  variables {
+    github_owner_id      = "example-org"
+    github_repository_id = ""
+  }
+
+  expect_failures = [var.github_owner_id, var.github_repository_id]
+}
+
+run "rejects_a_role_path_without_slashes" {
+  command = plan
+
+  variables {
+    role_path = "ci"
+  }
+
+  expect_failures = [var.role_path]
+}
+
+run "rejects_an_empty_repository_list" {
+  command = plan
+
+  variables {
+    main_repositories = []
+  }
+
+  expect_failures = [var.main_repositories]
+}
+
+run "rejects_a_repository_that_is_both_main_and_pr" {
+  command = plan
+
+  variables {
+    pr_repositories = ["rarebit/pr/game", "rarebit/game"]
+  }
+
+  expect_failures = [var.pr_repositories]
 }
