@@ -12,6 +12,7 @@ export function testConfig(over: Record<string, string> = {}): Config {
     REDIS_URL,
     VALIDATOR_URL: "http://127.0.0.1:1", // unused: the tests pass a fake validator
     ALLOWED_ORIGINS: "*",
+    TRUSTED_PROXY_HOPS: "0", // the tests connect directly
     ROUND_SECONDS: "3",
     VOTE_SECONDS: "2",
     RESULTS_SECONDS: "1",

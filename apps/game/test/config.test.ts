@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "../src/config.js";
 
-const base = { REDIS_URL: "redis://localhost:6379", VALIDATOR_URL: "http://validator:8080", ALLOWED_ORIGINS: "https://rarebit.example" };
+const base = {
+  REDIS_URL: "redis://localhost:6379",
+  VALIDATOR_URL: "http://validator:8080",
+  ALLOWED_ORIGINS: "https://rarebit.example",
+  TRUSTED_PROXY_HOPS: "1",
+};
 
 describe("loadConfig", () => {
   it("fills in the defaults", () => {
     const c = loadConfig(base);
     expect(c).toMatchObject({ GAME_PORT: 8080, ROUND_SECONDS: 20, VOTE_SECONDS: 5, MAX_ROUNDS: 10, MAX_STRIKES: 3 });
     expect(c).toMatchObject({ QUICKPLAY_MIN_PLAYERS: 3, QUICKPLAY_COUNTDOWN_SECONDS: 15, ROOM_TTL_SECONDS: 7200, LOBBY_TTL_SECONDS: 600 });
-    expect(c).toMatchObject({ MAX_CONNECTIONS_PER_IP: 20, TRUSTED_PROXY_HOPS: 0, DRAIN_DELAY_SECONDS: 15, SHUTDOWN_TIMEOUT_SECONDS: 10 });
+    expect(c).toMatchObject({ MAX_CONNECTIONS_PER_IP: 20, TRUSTED_PROXY_HOPS: 1, DRAIN_DELAY_SECONDS: 15, SHUTDOWN_TIMEOUT_SECONDS: 10 });
     expect(c.allowedOrigins).toEqual(["https://rarebit.example"]);
   });
 
@@ -40,6 +45,9 @@ describe("loadConfig", () => {
     { name: "a bad log level", env: { ...base, LOG_LEVEL: "loud" }, mentions: "LOG_LEVEL" },
     { name: "a bad socket path", env: { ...base, SOCKET_PATH: "socket.io" }, mentions: "SOCKET_PATH" },
     { name: "too many proxy hops", env: { ...base, TRUSTED_PROXY_HOPS: "9" }, mentions: "TRUSTED_PROXY_HOPS" },
+    // No default: behind a load balancer, a wrong one counts every player as the load balancer.
+    { name: "no proxy hops", env: { ...base, TRUSTED_PROXY_HOPS: undefined }, mentions: "TRUSTED_PROXY_HOPS: required" },
+    { name: "proxy hops that aren't a number", env: { ...base, TRUSTED_PROXY_HOPS: "alb" }, mentions: "TRUSTED_PROXY_HOPS" },
   ])("rejects $name", ({ env, mentions }) => {
     expect(() => loadConfig(env)).toThrow(ConfigError);
     expect(() => loadConfig(env)).toThrow(mentions);

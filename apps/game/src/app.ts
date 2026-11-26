@@ -78,9 +78,13 @@ export function createGameServer(config: Config, log: Logger, opts: { validator?
     pingTimeout: 5_000,
     allowRequest: (req: IncomingMessage, callback) => {
       // Not while starting, draining or cut off from Redis: the player couldn't play here anyway.
-      if (!redisUp() || draining) return callback("not ready", false);
+      if (!redisUp() || draining) {
+        metrics.connectionsRefusedTotal.inc({ reason: "not_ready" });
+        return callback("not ready", false);
+      }
       const origin = req.headers.origin;
       const allowed = config.allowedOrigins === null || (origin !== undefined && config.allowedOrigins.includes(origin));
+      if (!allowed) metrics.connectionsRefusedTotal.inc({ reason: "origin" });
       callback(allowed ? null : "origin not allowed", allowed);
     },
   });
@@ -148,7 +152,10 @@ export function createGameServer(config: Config, log: Logger, opts: { validator?
   io.use((socket, next) => {
     const ip = clientIp(socket);
     const count = perIp.get(ip) ?? 0;
-    if (count >= config.MAX_CONNECTIONS_PER_IP) return next(new Error("too_many_connections"));
+    if (count >= config.MAX_CONNECTIONS_PER_IP) {
+      metrics.connectionsRefusedTotal.inc({ reason: "per_ip" });
+      return next(new Error("too_many_connections"));
+    }
     perIp.set(ip, count + 1);
     socket.once("disconnect", () => {
       const left = (perIp.get(ip) ?? 1) - 1;

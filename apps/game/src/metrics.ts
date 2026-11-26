@@ -26,6 +26,11 @@ export function createMetrics(gauges: Gauges) {
     wsDisconnectsTotal: counter("game_ws_disconnects_total", "WebSocket disconnects, by reason.", ["reason"]),
     redisErrorsTotal: counter("game_redis_errors_total", "Redis client errors and failed Redis operations."),
     rateLimitedTotal: counter("game_rate_limited_total", "Client events refused by the per-socket rate limit."),
+    connectionsRefusedTotal: counter(
+      "game_connections_refused_total",
+      "WebSocket connections refused, by reason: not_ready, origin, per_ip.",
+      ["reason"],
+    ),
     answerAckSeconds: histogram("game_answer_ack_seconds", "Time from receiving an answer to acknowledging it.", [
       0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1,
     ]),

@@ -191,6 +191,39 @@ run("the game against Redis", { timeout: 60_000 }, () => {
       });
     expect(await open("https://evil.example")).toBe(false);
     expect(await open("https://rarebit.example")).toBe(true);
+    expect(await refused(a)).toEqual({ origin: 1 });
+  });
+
+  /** game_connections_refused_total by reason, from the pod's /metrics. */
+  async function refused(p: Pod): Promise<Record<string, number>> {
+    const text = await (await fetch(`http://127.0.0.1:${p.port}/metrics`)).text();
+    const counts: Record<string, number> = {};
+    for (const m of text.matchAll(/^game_connections_refused_total\{reason="([a-z_]+)"\} (\d+)$/gm)) counts[m[1]!] = Number(m[2]);
+    return counts;
+  }
+
+  // Behind the ALB every connection comes from a load balancer address; the player's is in
+  // X-Forwarded-For. With the hops right, the per-address cap applies to players, not to the ALB.
+  it.each([
+    { hops: "1", second: true, counts: {} },
+    { hops: "0", second: false, counts: { per_ip: 1 } },
+  ])("counts players by X-Forwarded-For with TRUSTED_PROXY_HOPS=$hops", async ({ hops, second, counts }) => {
+    const a = await pod("a", testConfig({ TRUSTED_PROXY_HOPS: hops, MAX_CONNECTIONS_PER_IP: "1" }));
+    const open = (player: string) =>
+      new Promise<boolean>((resolve) => {
+        const s = connect(`http://127.0.0.1:${a.port}`, {
+          transports: ["websocket"],
+          reconnection: false,
+          forceNew: true,
+          extraHeaders: { "x-forwarded-for": player },
+        });
+        sockets.push(s);
+        s.once("connect", () => resolve(true));
+        s.once("connect_error", () => resolve(false));
+      });
+    expect(await open("203.0.113.1")).toBe(true);
+    expect(await open("203.0.113.2")).toBe(second);
+    expect(await refused(a)).toEqual(counts);
   });
 
   /** A private room on one pod, started; resolves with round 1's round:start. */

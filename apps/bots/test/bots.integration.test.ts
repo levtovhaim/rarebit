@@ -76,6 +76,7 @@ maybe("the bots against the game server", { timeout: 180_000 }, () => {
       REDIS_URL,
       VALIDATOR_URL: validator.url,
       ALLOWED_ORIGINS: ORIGIN,
+      TRUSTED_PROXY_HOPS: "0", // the bots connect to the servers directly
       ROUND_SECONDS: "3",
       VOTE_SECONDS: "2",
       RESULTS_SECONDS: "1",

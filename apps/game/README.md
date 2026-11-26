@@ -93,6 +93,7 @@ Error codes:
 | `game_ws_disconnects_total` | `reason` | Socket.IO's disconnect reasons |
 | `game_redis_errors_total` | | Redis client errors and failed Redis operations |
 | `game_rate_limited_total` | | events refused by the rate limit |
+| `game_connections_refused_total` | `reason` | WebSocket connections refused: `not_ready` (starting, draining or without Redis), `origin` (not in `ALLOWED_ORIGINS`), `per_ip` (over `MAX_CONNECTIONS_PER_IP`) |
 | `game_draining` | | 1 during shutdown |
 
 The Node.js defaults come too, event-loop lag (`nodejs_eventloop_lag_seconds`) included. Logs are JSON on stdout, with `room_id` and `round`, and never contain answers or tokens.
@@ -118,7 +119,7 @@ Environment variables, checked at startup; the process exits listing every probl
 | `ROOM_TTL_SECONDS` | `7200` | 300–86400: a game's keys expire this long after its last change |
 | `LOBBY_TTL_SECONDS` | `600` | 60–86400: the same for a room that hasn't started, or has ended |
 | `MAX_CONNECTIONS_PER_IP` | `20` | 1–10000, per pod |
-| `TRUSTED_PROXY_HOPS` | `0` | 0–5: how many proxies in front of the pod append to `X-Forwarded-For` (behind the ALB: 1). With 0 the peer address counts. |
+| `TRUSTED_PROXY_HOPS` | required | 0–5: how many proxies in front of the pod append to `X-Forwarded-For`: behind the ALB 1, behind the local stack's nginx 1, connected directly 0 (the peer address counts). No default: a wrong value behind a load balancer counts every player as the load balancer's address, and `MAX_CONNECTIONS_PER_IP` then refuses all but a few dozen per pod. |
 | `DRAIN_DELAY_SECONDS` | `15` | 0–60: how long readiness fails before players are told to reconnect |
 | `SHUTDOWN_TIMEOUT_SECONDS` | `10` | 1–300: after that and the 1 s for clients to hear `server:draining`, the process gives up waiting and exits 1 |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
@@ -180,7 +181,7 @@ The cross-pod test fails without the Redis adapter (checked).
 
 The image smoke test checks the image's contract (below), then, against a throwaway Redis: a bad config exits 1 without printing values; `/readyz`, `/healthz`, `/version` (matching the image's revision label) and `/metrics`; a room created and read back over Socket.IO (`test/smoke-client.ts`); `check-ready` inside the container; one process, `node` itself; and a SIGTERM drain that exits 0.
 
-Run it locally: `npm run build && REDIS_URL=redis://127.0.0.1:6379 VALIDATOR_URL=http://127.0.0.1:8080 ALLOWED_ORIGINS='*' npm start` in `apps/game`, or the image (`make game-image`) with the same variables. A docker compose stack (`make up`) isn't implemented yet.
+Run it locally: `npm run build && REDIS_URL=redis://127.0.0.1:6379 VALIDATOR_URL=http://127.0.0.1:8080 ALLOWED_ORIGINS='*' TRUSTED_PROXY_HOPS=0 npm start` in `apps/game`, or the image (`make game-image`) with the same variables. The whole stack, two replicas behind nginx included, runs with `make up` ([compose/](../../compose/README.md)).
 
 ## Image
 
@@ -194,7 +195,8 @@ The contract, checked by `make game-image-smoke`:
 - at most 230 MB unpacked (it's about 201 MB, 150 MB of which is the Node binary).
 
 Settings the deployment must get right:
-- **Probes:** `httpGet` on `/healthz` (liveness) and `/readyz` (readiness). The image has no shell, so `exec` probes and `preStop` hooks that run a shell can't work.
+- **Probes:** `httpGet` on `/healthz` (liveness) and `/readyz` (readiness), with `timeoutSeconds: 2` or more on readiness: `/readyz` waits up to 1 s for its Redis write, and the kubelet's default timeout is 1 s. The image has no shell, so `exec` probes and `preStop` hooks that run a shell can't work.
+- **`TRUSTED_PROXY_HOPS: 1`** behind the ALB, so `MAX_CONNECTIONS_PER_IP` counts players, not the ALB's addresses. `game_connections_refused_total{reason="per_ip"}` rising means the cap or the hops are wrong.
 - **Command health checks** (docker compose): `["/nodejs/bin/node", "/app/dist/check-ready.js"]`, which exits 0 when `/readyz` answers 200 within 2 s.
 - **`terminationGracePeriodSeconds`:** more than `DRAIN_DELAY_SECONDS + 1 + SHUTDOWN_TIMEOUT_SECONDS` (Shutdown, above).
 - **Stack traces in source:** the logs carry error messages, not stacks. To map Node's own stack traces back to the TypeScript, set `NODE_OPTIONS=--enable-source-maps`; the source maps are in the image.
