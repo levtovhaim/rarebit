@@ -11,7 +11,7 @@
 - cost controls
 
 ## Architecture
-- `apps/web`: React + Vite static UI (Hebrew, RTL), served by nginx-unprivileged. Supports `BASE_PATH`.
+- `apps/web`: React + Vite static UI (Hebrew, RTL), served by nginx-unprivileged. One build and one image work under any path prefix: the page reads its prefix from its own URL, so there's no `BASE_PATH` setting.
 - `apps/game`: Node.js + TypeScript + Socket.IO (websocket transport only). Rounds are server-authoritative. **All room and matchmaking state is in Redis**, so any pod can serve any room. Nicknames and answers pass an offensive-word filter. Answer events go to a Redis Stream for the data pipeline.
 - `apps/validator`: Go. Checks answers against the word lists in Postgres, using `native/hebrew-normalize` through cgo for normalization and fuzzy matching. The same image runs the `migrate` and `rarity` jobs.
 - `apps/bots`: TypeScript simulated players: load tests, synthetic monitoring, and the test arena's personas and bot swarm.
@@ -44,9 +44,9 @@
 - `make native`: build and test the C++ code in `native/` for the current OS, using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes.
 - `make validator`: build the library for cgo, then `go vet`, `go test -race` and `go build` in `apps/validator` (Linux; macOS unverified; on Windows in WSL). `make validator-integration` adds the Postgres tests against a throwaway container. Run both whenever `apps/validator` or `native/` changes. `make validator-image-smoke` builds the container image and runs it non-root and read-only against a throwaway Postgres: run it whenever `apps/validator`, `native/` or `data/categories/` changes.
 - `make game`: `npm ci` (install scripts disabled), type check, unit tests and build in `apps/game`. `make game-integration` runs the Redis tests, with several game servers as pods, against a throwaway Redis container. Run both whenever `apps/game` changes. `make game-image-smoke` builds the game image and runs it non-root and read-only against a throwaway Redis: run it whenever `apps/game` changes too (after `make game`, which installs its test client).
-- `make web`: `npm ci`, type check, unit tests and `vite build` in `apps/web` (static files in `dist/`). Run it whenever `apps/web` changes. `cd apps/web && npm run dev` serves it on http://localhost:5173 against the local stack (`make up`).
+- `make web`: `npm ci`, type check, unit tests and `vite build` in `apps/web` (static files in `dist/`). Run it whenever `apps/web` changes. `make web-image-smoke` builds the web image (nginx-unprivileged) and checks it non-root and read-only: the runtime contract, caching and security headers, any path prefix, the graceful stop. Run it whenever `apps/web` changes too. `cd apps/web && npm run dev` serves the UI on http://localhost:5173 against the local stack (`make up`), reloading on every edit.
 - `make bots`: `npm ci`, type check, unit tests and build in `apps/bots`. `make bots-integration` plays the bots against two real game servers (`apps/game/dist`), a throwaway Redis and a fake validator, including a server killed and one drained mid-round. Run both whenever `apps/bots` or `apps/game` changes (after `make game`). `make bots-image-smoke` builds the bots image and checks its contract: run it whenever `apps/bots` or `data/categories/` changes.
-- `make up` / `make smoke` / `make down`: local stack with docker compose (`compose/`): Postgres, migrate, the validator, Redis, two game replicas behind nginx on 127.0.0.1:8080; `smoke` = the bots image plays a full game through it.
+- `make up` / `make smoke` / `make down`: local stack with docker compose (`compose/`): Postgres, migrate, the validator, Redis, two game replicas and the web UI behind nginx on 127.0.0.1:8080 (play there); `smoke` = the bots image plays a full game through it.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git.
 - `plat doctor`: verify tools, versions, AWS identity and kube context.
 - `plat env up` / `plat env down`: create or destroy the AWS platform. **A human runs it or approves the exact command** (rule 2).
@@ -84,7 +84,7 @@
    - endpoints: `/healthz` (liveness), `/readyz` (readiness; false while draining), `/metrics` (Prometheus), `/version` (git SHA)
    - JSON logs to stdout
    - config validated at startup
-   - graceful drain on SIGTERM
+   - graceful drain on the image's stop signal: SIGTERM, or SIGQUIT for nginx, whose SIGTERM is a fast stop (ADR 0027)
    - runs as non-root with a read-only root filesystem
 8. **Docs move with the code.** An architecture change needs an ADR in `docs/adr/`. An ops change needs a runbook in `docs/runbooks/`. An incident or chaos finding gets a postmortem in `docs/postmortems/`.
 9. **Don't bypass checks.** No `--no-verify`, no disabled tests, no skipped scanners. Fix the cause, or open an issue explaining why not.

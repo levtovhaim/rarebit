@@ -9,7 +9,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `native/hebrew-normalize` | C++20 static library, C API | Normalizes answers and matches them against word-list entries ([README](../native/hebrew-normalize/README.md), ADRs 0008–0011) | built |
 | `apps/validator` | Go, cgo | Checks an answer against the word lists in Postgres, using `hebrew-normalize`: `POST /v1/validate`, and `GET /v1/categories` for the letters each category can play, HTTP/JSON ([README](../apps/validator/README.md), ADR 0013). The same binary runs the `migrate` job (schema migrations and the word-list load, ADRs 0014 and 0016) and later the `rarity` job. Image: distroless, built and smoke-tested locally (ADR 0017). | built (image not in a registry yet) |
 | `apps/game` | Node.js, TypeScript, Socket.IO | Server-authoritative rounds. All room, timer and matchmaking state is in Redis, so any pod can serve any room and finish a round another pod started ([README](../apps/game/README.md), ADRs 0019–0021). Image: distroless Node.js, built and smoke-tested locally (ADR 0022). | built (image not in a registry yet) |
-| `apps/web` | React, Vite | Hebrew (RTL) UI for phones, built to static files that work under any path prefix (`BASE_PATH`); every screen renders from the room snapshot the game pushes, and the player resumes after a reload or a drain ([README](../apps/web/README.md), ADR 0026). To be served by nginx-unprivileged. | built (no image yet) |
+| `apps/web` | React, Vite | Hebrew (RTL) UI for phones, built to static files that work under any path prefix (relative asset URLs, the prefix read from the page's own URL; no `BASE_PATH` setting); every screen renders from the room snapshot the game pushes, and the player resumes after a reload or a drain ([README](../apps/web/README.md), ADR 0026). Image: nginx-unprivileged serving the build under any prefix on 8080, `/metrics` on 9113, the rest of the runtime contract in nginx (ADR 0027); hashed assets cached for a year, the page revalidated (ADR 0028); a strict CSP (ADR 0029); built and smoke-tested locally. | built (image not in a registry yet) |
 | `apps/bots` | TypeScript, `socket.io-client` | Simulated players that are full protocol clients: the synthetic game (exit 0 or 1), load tests and the chaos observer, judged by failed games; a strategy hook for the test arena's personas ([README](../apps/bots/README.md), ADR 0023). Image: distroless Node.js, built and smoke-tested locally (ADR 0025). Later the bot swarm. | built (image not in a registry yet) |
 | `apps/content-agents` | scheduled agents | The answer curator and the category creator: they propose content changes as PRs to `data/` and never write to the database | planned |
 | `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Seeded with the six regular categories. | seeded |
@@ -32,7 +32,7 @@ phone ──WebSocket──> game ──> validator ──> Postgres (word lists
 
 ## Local stack
 
-`make up` runs all of it on one machine with docker compose ([compose/](../compose/README.md), ADR 0024): nginx on `127.0.0.1:8080` in front of two game replicas (round robin, no sticky sessions), Redis, the validator, Postgres, and the `migrate` job that loads the word lists. Startup is gated on health: the validator waits for `migrate` to finish, the game for Redis. `make smoke` runs the bots image, which plays a game through nginx (ADR 0025).
+`make up` runs all of it on one machine with docker compose ([compose/](../compose/README.md), ADR 0024): nginx on `127.0.0.1:8080` in front of the web UI's container (`/`) and two game replicas (`/socket.io/`, round robin, no sticky sessions), Redis, the validator, Postgres, and the `migrate` job that loads the word lists. Startup is gated on health: the validator waits for `migrate` to finish, the game for Redis. `make smoke` runs the bots image, which plays a game through nginx (ADR 0025).
 
 ## Content changes
 
@@ -57,5 +57,5 @@ The runtime contract is in [CLAUDE.md](../CLAUDE.md) → Rules, rule 7:
 - `/healthz`, `/readyz` (false while draining), `/metrics`, `/version`;
 - JSON logs to stdout;
 - config from environment variables, validated at startup;
-- graceful drain on SIGTERM;
+- graceful drain on the image's stop signal (SIGTERM, or SIGQUIT for nginx);
 - non-root with a read-only root filesystem.

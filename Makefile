@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web up smoke down kind-up kind-down
+.PHONY: help check native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web web-image web-image-smoke up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -60,6 +60,15 @@ game-integration: ## Run the game's Redis tests (several servers as pods) agains
 web: ## Install the locked npm packages, type-check, unit-test and build apps/web (static files in dist/)
 	cd apps/web && npm ci --no-fund && npm run typecheck && npm test && npm run build && test -f dist/index.html
 
+WEB_IMAGE ?= rarebit-web:dev
+
+web-image: ## Build the web UI image (apps/web/Dockerfile; the context is the repo root)
+	sha="$$(git rev-parse HEAD | cut -c1-7)$$(test -z "$$(git status --porcelain)" || echo -dirty)"; \
+	docker build -f apps/web/Dockerfile --build-arg GIT_SHA="$$sha" -t "$(WEB_IMAGE)" .
+
+web-image-smoke: web-image ## Run the web image non-root and read-only: the UI under any prefix, caching, the contract, the stop
+	bash apps/web/test/image-smoke.sh "$(WEB_IMAGE)"
+
 bots: ## Install the locked npm packages, type-check, unit-test and build apps/bots
 	cd apps/bots && npm ci --no-fund && npm run typecheck && npm test && npm run build && test -f dist/main.js
 
@@ -111,12 +120,14 @@ export RAREBIT_PORT
 # The stack's Postgres password is random and kept in compose/.env (git-ignored; compose reads it)
 # for as long as the stack exists, so a second `make up` reuses it. `make down` removes it with
 # the database.
-up: validator-image game-image ## Start the local stack (compose/compose.yaml) and wait until it's healthy
+up: validator-image game-image web-image ## Start the local stack (compose/compose.yaml) and wait until it's healthy
 	test -f compose/.env || printf 'RAREBIT_PG_PASSWORD=%s\n' "$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')" > compose/.env
 	$(COMPOSE) up -d --wait --wait-timeout 180
 	@echo "up: http://127.0.0.1:$(RAREBIT_PORT) (make smoke plays a game through it; make down removes it all)"
 
-smoke: bots-image ## Bots play a full game through nginx against the running stack (make up first)
+smoke: bots-image ## The web UI answers at /, then bots play a full game through nginx (make up first)
+	curl -fsS --max-time 5 "http://127.0.0.1:$(RAREBIT_PORT)/" | grep -q 'id="root"' || \
+		{ echo "smoke: no web UI at http://127.0.0.1:$(RAREBIT_PORT)/" >&2; exit 1; }
 	$(COMPOSE) run --rm bots synthetic --timeout 300
 
 down: ## Stop the local stack and remove its containers, network and data
