@@ -18,10 +18,99 @@
       }
     },
     "quantity": { "type": ["string", "number"], "pattern": "^[0-9]+(\\.[0-9]+)?(m|Ki|Mi|Gi)?$" },
-    "envVar": {
+    "dnsName": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" },
+    "keyRef": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "key"],
+      "properties": {
+        "name": { "$ref": "#/definitions/dnsName" },
+        "key": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "envVar": {
+      "description": "A variable's value, or a reference to a Secret or ConfigMap key. A secret (a name ending in PASSWORD, SECRET or TOKEN, or DATABASE_URL) must come from a Secret, and no value may hold a password inside a URL: $(VAR) references to other variables are fine.",
+      "type": "object",
+      "additionalProperties": false,
       "required": ["name"],
-      "properties": { "name": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" } }
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
+        "value": { "type": "string", "not": { "pattern": "://[^/@]*:[^/@$][^/@]*@" } },
+        "valueFrom": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "maxProperties": 1,
+          "properties": {
+            "secretKeyRef": { "$ref": "#/definitions/keyRef" },
+            "configMapKeyRef": { "$ref": "#/definitions/keyRef" }
+          }
+        }
+      },
+      "oneOf": [{ "required": ["value"] }, { "required": ["valueFrom"] }],
+      "if": { "properties": { "name": { "pattern": "(PASSWORD|SECRET|TOKEN|^DATABASE_URL)$" } } },
+      "then": {
+        "required": ["valueFrom"],
+        "properties": { "valueFrom": { "required": ["secretKeyRef"] } }
+      }
+    },
+    "volume": {
+      "description": "An emptyDir, a Secret or a ConfigMap: nothing from the node (hostPath) and no extra service account token.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "emptyDir"],
+          "properties": {
+            "name": { "$ref": "#/definitions/dnsName" },
+            "emptyDir": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sizeLimit"],
+              "properties": { "sizeLimit": { "$ref": "#/definitions/quantity" }, "medium": { "const": "Memory" } }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "secret"],
+          "properties": {
+            "name": { "$ref": "#/definitions/dnsName" },
+            "secret": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["secretName"],
+              "properties": {
+                "secretName": { "$ref": "#/definitions/dnsName" },
+                "items": { "type": "array" },
+                "defaultMode": { "type": "integer", "minimum": 0, "maximum": 511 },
+                "optional": { "type": "boolean" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "configMap"],
+          "properties": {
+            "name": { "$ref": "#/definitions/dnsName" },
+            "configMap": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": {
+                "name": { "$ref": "#/definitions/dnsName" },
+                "items": { "type": "array" },
+                "defaultMode": { "type": "integer", "minimum": 0, "maximum": 511 },
+                "optional": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "properties": {
@@ -32,8 +121,16 @@
       "additionalProperties": false,
       "required": ["registry", "repository", "tag"],
       "properties": {
-        "registry": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$" },
-        "repository": { "type": "string", "pattern": "^[a-z0-9]+([._/-][a-z0-9]+)*$" },
+        "registry": {
+          "description": "Our ECR registry (set at install time), or Docker Hub for an upstream image",
+          "type": "string",
+          "pattern": "^([0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com|docker\\.io)$"
+        },
+        "repository": {
+          "description": "One of our repositories (main or PR), or an upstream image we run",
+          "type": "string",
+          "pattern": "^(rarebit/(pr/)?[a-z0-9-]+|library/redis)$"
+        },
         "tag": {
           "description": "<tag>@sha256:<digest>: never a tag alone, never latest",
           "type": "string",
@@ -45,6 +142,15 @@
     "owner": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
     "tier": { "enum": ["1", "2", "3"] },
     "replicas": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "rollout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy": { "enum": ["RollingUpdate", "Recreate"] },
+        "maxSurge": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "fastNodeFailover": { "type": "boolean" },
     "args": { "type": "array", "items": { "type": "string" } },
     "env": { "type": "array", "items": { "$ref": "#/definitions/envVar" } },
     "extraEnv": { "type": "array", "items": { "$ref": "#/definitions/envVar" } },
@@ -103,22 +209,38 @@
       }
     },
     "tmpVolume": { "type": "boolean" },
-    "volumes": { "type": "array", "items": { "type": "object", "required": ["name"] } },
+    "volumes": { "type": "array", "items": { "$ref": "#/definitions/volume" } },
     "volumeMounts": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["name", "mountPath", "readOnly"],
-        "properties": { "readOnly": { "type": "boolean" } }
+        "properties": {
+          "name": { "$ref": "#/definitions/dnsName" },
+          "mountPath": { "type": "string", "pattern": "^/[A-Za-z0-9/_.-]*$" },
+          "readOnly": { "type": "boolean" },
+          "subPath": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" }
+        }
       }
     },
     "ingress": {
+      "description": "Joins the one ALB (IngressGroup rarebit). The group, scheme, listener, target type and health check are the chart's; a service sets only its order in the group and its target group's attributes.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "enabled": { "type": "boolean" },
         "className": { "const": "alb" },
-        "annotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "annotations": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "alb.ingress.kubernetes.io/group.order",
+              "alb.ingress.kubernetes.io/target-group-attributes"
+            ]
+          },
+          "additionalProperties": { "type": "string" }
+        },
         "paths": {
           "type": "array",
           "items": {

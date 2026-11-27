@@ -20,14 +20,11 @@ resources:
 ingress:
   enabled: true
   annotations:
-    alb.ingress.kubernetes.io/group.name: rarebit
     alb.ingress.kubernetes.io/group.order: "100"
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    alb.ingress.kubernetes.io/healthcheck-path: /readyz
-    # Deregistration ends before the preStop pause does (apps/web/README.md). Stickiness keeps a
-    # player on one pod during a rollout, so a new page never asks an old pod for its assets (#44).
+    # The preStop pause (15 s) covers the time the Service and the ALB take to stop sending new
+    # requests; the deregistration delay then lets requests already in flight finish, within the
+    # grace period. Stickiness keeps a player on one pod during a rollout, so a new page never asks
+    # an old pod for its assets (#44).
     alb.ingress.kubernetes.io/target-group-attributes: >-
       deregistration_delay.timeout_seconds=15,stickiness.enabled=true,stickiness.type=lb_cookie,stickiness.lb_cookie.duration_seconds=3600
   paths:

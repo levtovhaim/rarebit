@@ -1,12 +1,16 @@
 # validator migrate: applies the schema migrations and loads the word lists shipped in the image
-# (/data/categories, ADR 0018), then exits (ADR 0014). It runs once per image tag: a new tag is a new Job.
-# The database URL is the environment's (deploy/envs/<env>/validator-migrate/values.yaml, extraEnv).
+# (/data/categories, ADR 0018), then exits (ADR 0014). Each different pod template (a new image, a new variable) is a new Job.
+# DATABASE_URL is the environment's (deploy/envs/<env>/validator-migrate/values.yaml, extraEnv): a
+# secretKeyRef to the database's Secret. Its image tag is always the validator's (deploy/test/render.sh).
 mode: job
 owner: haimlevtov # catalog/validator.yaml
 tier: "1"
 image:
   repository: rarebit/validator
 args: [migrate]
+env:
+  - name: GOMEMLIMIT
+    value: 200MiB
 resources:
   requests:
     cpu: 50m
@@ -14,5 +18,7 @@ resources:
   limits:
     memory: 256Mi
 job:
-  backoffLimit: 2
-  activeDeadlineSeconds: 300
+  # Rides out a database that's still starting (a fresh cluster's Postgres takes minutes): up to 6
+  # retries within 15 minutes, longer than migrate's own 5-minute timeout.
+  backoffLimit: 6
+  activeDeadlineSeconds: 900

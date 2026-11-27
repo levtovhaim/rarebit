@@ -8,15 +8,22 @@ app.kubernetes.io/name: {{ include "service.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
-{{/* CLAUDE.md → Conventions: name, part-of, owner and tier, the last two from catalog/<service>.yaml */}}
-{{- define "service.labels" -}}
+{{/* CLAUDE.md → Conventions: name, part-of, owner and tier, the last two from catalog/<service>.yaml.
+     The pods' labels: nothing that changes with the chart's own version, so a chart release alone
+     never restarts a pod. */}}
+{{- define "service.podLabels" -}}
 {{ include "service.selectorLabels" . }}
 app.kubernetes.io/part-of: rarebit
 app.kubernetes.io/version: {{ .Values.image.tag | splitList "@" | first | trunc 63 | trimSuffix "-" | quote }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 owner: {{ .Values.owner | quote }}
 tier: {{ .Values.tier | quote }}
+{{- end -}}
+
+{{/* The other objects' labels also say which chart made them. */}}
+{{- define "service.labels" -}}
+{{ include "service.podLabels" . }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- end -}}
 
 {{- define "service.image" -}}
@@ -56,19 +63,34 @@ restartPolicy: Never
 {{- else }}
 terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
 {{- if gt (int .Values.replicas) 1 }}
+# Spread across zones and nodes, counting only this rollout's pods (pod-template-hash), so the old
+# pods leaving don't pile the new ones onto one node.
 topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
     whenUnsatisfiable: ScheduleAnyway
+    matchLabelKeys: [pod-template-hash]
     labelSelector:
       matchLabels:
         {{- include "service.selectorLabels" . | nindent 8 }}
   - maxSkew: 1
     topologyKey: kubernetes.io/hostname
     whenUnsatisfiable: ScheduleAnyway
+    matchLabelKeys: [pod-template-hash]
     labelSelector:
       matchLabels:
         {{- include "service.selectorLabels" . | nindent 8 }}
+{{- end }}
+{{- if .Values.fastNodeFailover }}
+tolerations:
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
+  - key: node.kubernetes.io/unreachable
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
 {{- end }}
 {{- end }}
 containers:

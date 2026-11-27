@@ -40,7 +40,7 @@ With no ready validator pod, the Service has no endpoints. The game treats every
    - `validation failed` or `listing categories failed` (level ERROR): a request to `/v1/validate` or `/v1/categories` hit a Postgres error; the cause is in `err`.
 3. The migrate Job:
    ```bash
-   kubectl -n <namespace> get jobs -l app.kubernetes.io/name=validator
+   kubectl -n <namespace> get jobs -l app.kubernetes.io/name=validator-migrate
    kubectl -n <namespace> logs job/<migrate-job>
    ```
 4. Locally (docker compose or a shell): `curl -s localhost:8080/readyz` and the process's stdout.

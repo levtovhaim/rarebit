@@ -8,6 +8,9 @@ metadata:
     {{- include "service.labels" . | nindent 4 }}
 spec:
   maxUnavailable: 1
+  # Unready pods (a crash loop, a lost dependency) may always be evicted: they serve nothing, and
+  # waiting for them would block every node drain.
+  unhealthyPodEvictionPolicy: AlwaysAllow
   selector:
     matchLabels:
       {{- include "service.selectorLabels" . | nindent 6 }}

@@ -13,23 +13,30 @@ spec:
     matchLabels:
       {{- include "service.selectorLabels" . | nindent 6 }}
   strategy:
+    {{- if eq .Values.rollout.strategy "Recreate" }}
+    type: Recreate
+    {{- else }}
     type: RollingUpdate
     rollingUpdate:
-      # A new pod is ready before an old one goes: the service never drops below its replica count.
+      # New pods are ready before old ones go: the service never drops below its replica count.
       maxUnavailable: 0
-      maxSurge: 1
+      maxSurge: {{ .Values.rollout.maxSurge }}
+    {{- end }}
   template:
     metadata:
       labels:
-        {{- include "service.labels" . | nindent 8 }}
+        {{- include "service.podLabels" . | nindent 8 }}
     spec:
       {{- include "service.podSpec" . | nindent 6 }}
 {{- else }}
+{{- $podLabels := include "service.podLabels" . }}
+{{- $podSpec := include "service.podSpec" . }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  # A Job's pod template can't change, so each image gets its own Job: a new tag runs it again.
-  name: {{ printf "%s-%s" $name (.Values.image.tag | sha256sum | trunc 8) }}
+  # A Job's pod template can't change, so every different template (a new image, variable or limit)
+  # gets its own Job, named after it, and runs again. Re-running migrate is safe (ADR 0014).
+  name: {{ printf "%s-%s" $name (print $podLabels $podSpec | sha256sum | trunc 8) }}
   labels:
     {{- include "service.labels" . | nindent 4 }}
 spec:
@@ -38,7 +45,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "service.labels" . | nindent 8 }}
+        {{- $podLabels | nindent 8 }}
     spec:
-      {{- include "service.podSpec" . | nindent 6 }}
+      {{- $podSpec | nindent 6 }}
 {{- end }}

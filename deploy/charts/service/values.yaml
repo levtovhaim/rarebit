@@ -22,6 +22,14 @@ owner: ""
 tier: ""
 
 replicas: 2
+rollout:
+  # RollingUpdate keeps the replica count up during a rollout. Recreate stops the old pod first: for a
+  # single-replica store (Redis), where two pods side by side would split the state.
+  strategy: RollingUpdate
+  # New pods started at once in a rollout; for the game, all of them, so each player reconnects once.
+  maxSurge: 1
+# Leave a node that stops answering after 30 s instead of Kubernetes' 300 s: for a single replica.
+fastNodeFailover: false
 args: []
 # Environment variables (Kubernetes EnvVar objects), from deploy/apps/<service>/values.yaml.
 env: []
@@ -58,9 +66,13 @@ volumeMounts: []
 ingress:
   enabled: false
   className: alb
+  # The group, scheme, listener, target type and health check are the chart's (templates/ingress.yaml).
+  # A service sets only alb.ingress.kubernetes.io/group.order and .../target-group-attributes.
   annotations: {}
   paths: []
 
 job:
-  backoffLimit: 2
-  activeDeadlineSeconds: 300
+  # migrate gives up on a database that isn't there yet within seconds; on a fresh cluster Postgres
+  # takes minutes, so the Job retries for up to 15 minutes.
+  backoffLimit: 6
+  activeDeadlineSeconds: 900

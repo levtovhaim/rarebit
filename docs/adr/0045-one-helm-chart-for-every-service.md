@@ -31,8 +31,12 @@
 - no service account token, no service links;
 - requests for CPU and memory and a memory limit, with no CPU limit (it only throttles);
 - the labels, with `owner` and `tier` from the service's values, which the tests check against its catalog entry;
-- a rolling update that never drops below the replica count, and topology spread across zones and nodes;
-- a Job named after its image tag, since a Job's pod template can't change: a new tag runs the migration again.
+- the pods' labels leave out the chart's version, so a chart release alone never restarts a pod;
+- a rolling update that never drops below the replica count, or `Recreate` for a single-replica store (Redis), where two pods side by side would split the state;
+- topology spread across zones and nodes, counting only the current rollout's pods;
+- a PodDisruptionBudget that always lets an unready pod go, so it never blocks a node drain;
+- a Job named after a hash of its pod template, since a pod template can't change: a new image or variable runs the migration again;
+- the ALB's group settings (group name, scheme, listener, target type, health check, dropping invalid headers), the same on every Ingress, so a service can only set its order in the group and its target group's attributes.
 
 **`values.schema.json` refuses what the golden path doesn't allow:**
 - an image without a `sha256` digest, or `latest`;
@@ -40,18 +44,20 @@
 - missing resources, or a CPU limit;
 - a deployment without probes or a grace period;
 - a port under 1024, root, an ingress class other than `alb`;
-- a mount that doesn't say whether it's read-only;
+- a mount that doesn't say whether it's read-only, and any volume but an `emptyDir` with a size limit, a Secret or a ConfigMap (no `hostPath`, no projected token);
+- a registry other than our ECR (set at install time) or Docker Hub, and a repository other than ours or an upstream one we run;
+- a secret as a plain value: a variable named `*PASSWORD`, `*SECRET`, `*TOKEN` or `DATABASE_URL` must come from a Secret, and no value may hold a password inside a URL (`$(VAR)` references are fine);
 - any key the chart doesn't know, so a misspelling fails instead of being ignored.
 
 **Values come in three layers,** applied in order (`helm -f`):
 1. `deploy/apps/<service>/values.yaml`: what's true in every environment (ports, probes, timing, resources, Ingress rules);
 2. `deploy/envs/<env>/<service>/values.yaml`: what an environment adds (replicas, secrets, the allowed origin);
-3. `deploy/envs/<env>/<service>/image-tags.yaml`: the image tag with its digest, the only file a promotion changes.
+3. `deploy/envs/<env>/<service>/image-tags.yaml`: the image tag with its digest, the only file a promotion changes. It has no code owner, so the tests refuse anything in it but `image.tag`, and any tag but a `main-<sha7>` build by digest. The validator and its migrate Job always pin the same tag.
 
 **The registry's host isn't in git.** Our images' `image.registry` is set at install time from the account ID, outside git (ADR 0035). An upstream image (Redis) names its registry in its values.
 
 **Every service's shutdown timing is tested** against its README (`deploy/test/render.sh`, in `make deploy` and the `deploy` check in CI). The tests also check:
-- every rendered workload against the rules above;
+- every service alone and in every environment, against the rules above;
 - every manifest with kubeconform;
 - the one load balancer: only the game and the web UI have an Ingress, all in IngressGroup `rarebit` with the same scheme and listener (CLAUDE.md rule 6). The game takes `/socket.io` ahead of the web UI's `/`, and no Ingress routes to a metrics port.
 
@@ -75,7 +81,7 @@
   - **The registry has to be passed at every install.** Argo CD (later) needs it from somewhere other than git: a cluster-side value, or an ECR pull-through rule.
   - **Lists don't merge in Helm,** so an environment adds variables through `extraEnv`, not `env`.
   - **kubeconform downloads the Kubernetes schemas** from GitHub on every run without a cache, and validates against the newest published version, not the cluster's.
-  - **The chart has no NetworkPolicy, HPA, ServiceMonitor or ExternalSecret yet.** They arrive with the cluster features they need.
+  - **The chart has no NetworkPolicy, HPA, ServiceMonitor or ExternalSecret yet.** They arrive with the cluster features they need; until NetworkPolicies (#72), any pod in the cluster can reach Redis, which is why it has a password.
 - **Follow-ups:**
   - the first deployment, to EKS, with its environment's values and image tags;
   - Argo CD, monitoring and policies, each in the pull request that adds the feature.
