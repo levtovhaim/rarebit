@@ -36,6 +36,10 @@ One file per category in `categories/`, named by its id:
 
 Spellings that differ in other letters do need their own entry, e.g. שבדיה / שוודיה (ב vs וו).
 
+**Names and titles** (people, brands, companies, movies, series) are listed as players write them. The round's letter is the first letter of the answer, so:
+- list the full name, and also the surname alone when that's how people say it (דוד בן גוריון, בן גוריון);
+- list a foreign title by its Hebrew title in Israel (מלך האריות), or by the original name when that's what people say (פרוזן).
+
 Different words can share a spelling key, e.g. שירה / שרה, תומר / תמר, אורז / ארז. Keep both. The validator checks exact matches first, and within one category both are valid answers anyway.
 
 ## Sources
