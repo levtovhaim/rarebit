@@ -2,7 +2,8 @@ name: _runners
 
 # Reusable: resolves ci/runner-policy.yaml into one runner label per job class and OS (ADR 0005), with
 # the repository variables RUNNER_FLEET and RUNNER_LABEL applied (docs/runbooks/ci-runner-fallback.md).
-# A caller:
+#
+# Call it once per top-level workflow, and pass the labels on: outputs reach only the direct caller.
 #
 #   jobs:
 #     runners:
@@ -10,8 +11,15 @@ name: _runners
 #     build:
 #       needs: runners
 #       runs-on: ${{ fromJSON(needs.runners.outputs.labels)['heavy-build'].linux }}
+#     service:
+#       needs: runners
+#       uses: ./.github/workflows/_build-service.yml
+#       with:
+#         runner-labels: ${{ needs.runners.outputs.labels }}   # inside: fromJSON(inputs.runner-labels)
 #
-# Every other job's runs-on comes from here; this file's own job is the one fixed label.
+# Every job's runs-on comes from here, except this file's own job (the resolver can't route itself)
+# and the runner measurements (spike-runner.yml), which name each fleet's labels on purpose.
+# ci/test-resolve-runners.sh fails on any other literal runs-on.
 
 on:
   workflow_call:
@@ -19,6 +27,12 @@ on:
       labels:
         description: 'The runner label per class and OS, as JSON: {"<class>": {"<os>": "<label>"}}'
         value: ${{ jobs.resolve.outputs.labels }}
+      fleets:
+        description: 'The fleet each class and OS lands on, as JSON: {"<class>": {"<os>": "<fleet>"}}'
+        value: ${{ jobs.resolve.outputs.fleets }}
+      groups:
+        description: 'The runner group GitHub must report for each class and OS, as JSON: {"<class>": {"<os>": "<group>"}}'
+        value: ${{ jobs.resolve.outputs.groups }}
       pairs:
         description: 'Every class and OS the policy names, as a JSON list for a matrix: [{"class": ..., "os": ...}]'
         value: ${{ jobs.resolve.outputs.pairs }}
@@ -30,25 +44,25 @@ jobs:
     name: resolve runner labels
     # Fixed on purpose: the resolver can't route itself, and a GitHub-hosted runner starts in seconds.
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 3
     permissions:
       contents: read
     outputs:
       labels: ${{ steps.resolve.outputs.labels }}
+      fleets: ${{ steps.resolve.outputs.fleets }}
+      groups: ${{ steps.resolve.outputs.groups }}
       pairs: ${{ steps.resolve.outputs.pairs }}
     steps:
       - name: Check out the policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # ci/, plus the files at the repository's root (cone mode), .mise.toml among them: the
+          # resolver compares the image's yq and jq with its pins.
           sparse-checkout: ci
       - name: Resolve the labels
         id: resolve
         env:
           RUNNER_FLEET: ${{ vars.RUNNER_FLEET }}
           RUNNER_LABEL: ${{ vars.RUNNER_LABEL }}
-        run: |
-          labels="$(bash ci/resolve-runners.sh)"
-          pairs="$(jq -c '[to_entries[] | .key as $class | .value | keys[] | {class: $class, os: .}]' <<<"$labels")"
-          echo "labels=$labels" >>"$GITHUB_OUTPUT"
-          echo "pairs=$pairs" >>"$GITHUB_OUTPUT"
+        run: bash ci/resolve-runners.sh >/dev/null

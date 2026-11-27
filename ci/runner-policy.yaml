@@ -1,13 +1,18 @@
 # Which runner each CI job class uses on each OS (ADR 0005). ci/resolve-runners.sh reads this file in
-# the reusable workflow _runners.yml, and every job takes its runs-on label from there: no workflow
-# names a runner label of its own. Overrides (repository variables, docs/runbooks/ci-runner-fallback.md):
+# the reusable workflow _runners.yml, and every job takes its runs-on label from there. The one
+# exception is the runner measurements (spike-runner.yml, later runner-edge.yml), which name each
+# fleet's labels on purpose to compare them. Overrides (repository variables,
+# docs/runbooks/ci-runner-fallback.md):
 #   RUNNER_FLEET=policy (the default) uses `classes` below; github or incredibuild forces that fleet for
 #     every class, on every OS where the fleet has a runner (macOS has only github);
-#   RUNNER_LABEL, when set, replaces the label of every Linux job, whatever the fleet.
+#   RUNNER_LABEL, when set, replaces the label of every Linux job. It must be a Linux label listed in
+#     `fleets`; with RUNNER_FLEET=github, only a github label applies.
+# Neither override moves a class listed in `github_only`.
 
 # The runner label of each fleet, per OS. Facts, not choices: a label no runner serves leaves a job
-# queued forever, so every label here was seen running a job (docs/benchmarks/ci-runners.md), and the
-# Incredibuild ones are also listed in .github/actionlint.yaml.
+# queued for up to a day, so every label here was seen running a job (docs/benchmarks/ci-runners.md;
+# macos-26 in the runner policy run 45956498946), and the Incredibuild ones are also listed in
+# .github/actionlint.yaml.
 fleets:
   github:
     linux: ubuntu-24.04
@@ -18,13 +23,27 @@ fleets:
     windows: incredibuild-windows-2022 # 8 GB of memory, against 16 GB on windows-2022
     # No macOS runner (Incredibuild Console, 2026-11-23).
 
+# The runner group GitHub reports for each fleet's jobs (the jobs API's runner_group_name, set on
+# GitHub's side, unlike a runner's own name). The runner policy workflow checks every job's group
+# against its fleet. Seen in run 45956498946.
+runner_groups:
+  github: GitHub Actions
+  incredibuild: incredibuild
+
+# Classes that hold credentials (ADR 0005): they take AWS roles through OIDC (ADR 0038), and the roles
+# can't tell a token minted on the vendor's machine from one minted on GitHub's. Neither override
+# moves them.
+github_only:
+  - docker # pushes images with the PR and main ECR roles
+  - tf-plan # plans with gha-tf-plan
+
 # Which fleet each job class uses on each OS (ADR 0005).
 classes:
-  heavy-build: # long C/C++ compiles: worth the 2-3.5 min start-up on Linux
+  heavy-build: # long C/C++ compiles: worth the start-up (about 2.5-3.5 min in the spike) on Linux
     linux: incredibuild
     windows: github # MSVC needs memory: 16 GB here, 8 GB on Incredibuild
     macos: github # no Incredibuild runner
-  docker: # our image builds take a minute or two: shorter than the start-up
+  docker: # our image builds take a minute or two (an estimate; #67 measures it): shorter than the start-up
     linux: github
   e2e: # browsers on three OSes; short runs
     linux: github
