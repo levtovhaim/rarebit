@@ -3,7 +3,7 @@
 - **Alert(s):** none yet. The CI queue-time check comes with `plat bench` (Phase 2); until then this shows up as jobs that stay queued, or as a failed `runner policy` workflow.
 - **Service:** CI's runner fleets, routed by `ci/runner-policy.yaml` (ADR 0005)
 - **Severity:** same day: CI is blocked for the affected classes; running environments aren't touched
-- **Last fired on purpose:** not yet. The `runner policy` workflow and a switch to `RUNNER_FLEET=github` and back are this PR's live check.
+- **Last fired on purpose:** 2026-11-27, on the `runner policy` workflow's first run (45956498946). With `RUNNER_FLEET=policy`, `heavy-build` on Linux ran on `Incredibuild-run-140364128517` after a 41-second queue, and the other ten probes on `GitHub Actions <n>` runners. After `gh variable set RUNNER_FLEET … --body github` and a re-run of the same run, the resolver logged `RUNNER_FLEET=github` and all eleven ran on GitHub-hosted runners; then the variable went back to `policy`. A re-run reads the variables again, so step 3 below needs no new commit.
 
 Each job takes its `runs-on` label from the resolver (`.github/workflows/_runners.yml`, `ci/resolve-runners.sh`), which reads the policy and two repository variables:
 
@@ -56,7 +56,7 @@ All read-only.
    gh variable delete RUNNER_LABEL --repo levtovhaim/rarebit
    ```
 
-3. Cancel the runs stuck in the queue and start them again. A queued job keeps the label it was given, so it needs a fresh run to be resolved again:
+3. Cancel the runs stuck in the queue and start them again. A queued job keeps the label it was given, so it needs a new attempt; a re-run resolves the labels again with the new variables (seen on 2026-11-27):
 
    ```bash
    gh run cancel <run-id> --repo levtovhaim/rarebit
