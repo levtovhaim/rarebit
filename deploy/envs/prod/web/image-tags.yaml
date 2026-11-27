@@ -1,0 +1,3 @@
+# Written by deploy/push-images.sh: web, built from 56f78e7863cb8171adb5e76c8ecb14d2e8d00a33.
+image:
+  tag: main-56f78e7@sha256:add4c8b33f5c63b30ff5bf1ea53738118c52cd3d1a61e1f1c7e9505a4708381e
