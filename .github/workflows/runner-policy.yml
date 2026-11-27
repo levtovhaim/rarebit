@@ -1,0 +1,64 @@
+name: runner policy
+
+# Proves that ci/runner-policy.yaml routes jobs where it says (ADR 0005): it resolves the labels, then
+# runs a no-op job for every class and OS on its resolved runner, and checks that the job landed on the
+# expected fleet. Run it after changing the policy, or RUNNER_FLEET or RUNNER_LABEL
+# (docs/runbooks/ci-runner-fallback.md): Actions → runner policy → Run workflow.
+#
+# Fork pull requests run only after a maintainer approves them (the repository's setting for all
+# external contributors); this workflow can start Incredibuild runners, so check a fork's
+# .github/workflows/ and ci/ changes before approving.
+
+on:
+  pull_request:
+    paths:
+      - ci/**
+      - .github/workflows/_runners.yml
+      - .github/workflows/runner-policy.yml
+      - .github/actionlint.yaml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: runner-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runners:
+    # zizmor suggests the self-repository form ($/...), but actionlint 1.7.12, the newest release, rejects it
+    # as a reusable workflow call; switch when actionlint supports it.
+    uses: ./.github/workflows/_runners.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  probe:
+    name: ${{ matrix.class }} on ${{ matrix.os }}
+    needs: runners
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels)[matrix.class][matrix.os] }}
+    # An Incredibuild runner takes 2-4 minutes to start (docs/benchmarks/ci-runners.md); a job still
+    # queued after this is the failure the fallback runbook is for.
+    timeout-minutes: 20
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.runners.outputs.pairs) }}
+    steps:
+      - name: Check the fleet
+        shell: bash
+        env:
+          EXPECTED_LABEL: ${{ fromJSON(needs.runners.outputs.labels)[matrix.class][matrix.os] }}
+        run: |
+          # Incredibuild registers an ephemeral runner named Incredibuild-run-<id> for each job;
+          # GitHub-hosted runners are named "GitHub Actions <n>".
+          case "$EXPECTED_LABEL" in
+            incredibuild-*) want='^Incredibuild' ;;
+            *) want='^GitHub Actions' ;;
+          esac
+          echo "label=$EXPECTED_LABEL runner=$RUNNER_NAME os=$RUNNER_OS arch=$RUNNER_ARCH"
+          echo "| $EXPECTED_LABEL | $RUNNER_NAME | $RUNNER_OS $RUNNER_ARCH |" >>"$GITHUB_STEP_SUMMARY"
+          if ! [[ "$RUNNER_NAME" =~ $want ]]; then
+            echo "::error::label $EXPECTED_LABEL ran on runner '$RUNNER_NAME', not the expected fleet"
+            exit 1
+          fi

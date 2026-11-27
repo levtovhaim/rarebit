@@ -98,6 +98,12 @@ repos:
         language: system
         files: ^\.claude/skills/dependency-versioning/scripts/
         pass_filenames: false
+      - id: runner-policy-tests
+        name: runner policy tests (ci/runner-policy.yaml and its resolver, ADR 0005)
+        entry: bash ci/test-resolve-runners.sh
+        language: system
+        files: ^(ci/|\.github/actionlint\.yaml$)
+        pass_filenames: false
       - id: word-lists
         name: word lists (data/categories)
         entry: python data/tools/check_data.py

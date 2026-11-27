@@ -1,0 +1,54 @@
+name: _runners
+
+# Reusable: resolves ci/runner-policy.yaml into one runner label per job class and OS (ADR 0005), with
+# the repository variables RUNNER_FLEET and RUNNER_LABEL applied (docs/runbooks/ci-runner-fallback.md).
+# A caller:
+#
+#   jobs:
+#     runners:
+#       uses: ./.github/workflows/_runners.yml
+#     build:
+#       needs: runners
+#       runs-on: ${{ fromJSON(needs.runners.outputs.labels)['heavy-build'].linux }}
+#
+# Every other job's runs-on comes from here; this file's own job is the one fixed label.
+
+on:
+  workflow_call:
+    outputs:
+      labels:
+        description: 'The runner label per class and OS, as JSON: {"<class>": {"<os>": "<label>"}}'
+        value: ${{ jobs.resolve.outputs.labels }}
+      pairs:
+        description: 'Every class and OS the policy names, as a JSON list for a matrix: [{"class": ..., "os": ...}]'
+        value: ${{ jobs.resolve.outputs.pairs }}
+
+permissions: {}
+
+jobs:
+  resolve:
+    name: resolve runner labels
+    # Fixed on purpose: the resolver can't route itself, and a GitHub-hosted runner starts in seconds.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      labels: ${{ steps.resolve.outputs.labels }}
+      pairs: ${{ steps.resolve.outputs.pairs }}
+    steps:
+      - name: Check out the policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci
+      - name: Resolve the labels
+        id: resolve
+        env:
+          RUNNER_FLEET: ${{ vars.RUNNER_FLEET }}
+          RUNNER_LABEL: ${{ vars.RUNNER_LABEL }}
+        run: |
+          labels="$(bash ci/resolve-runners.sh)"
+          pairs="$(jq -c '[to_entries[] | .key as $class | .value | keys[] | {class: $class, os: .}]' <<<"$labels")"
+          echo "labels=$labels" >>"$GITHUB_OUTPUT"
+          echo "pairs=$pairs" >>"$GITHUB_OUTPUT"

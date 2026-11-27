@@ -1,0 +1,38 @@
+# Which runner each CI job class uses on each OS (ADR 0005). ci/resolve-runners.sh reads this file in
+# the reusable workflow _runners.yml, and every job takes its runs-on label from there: no workflow
+# names a runner label of its own. Overrides (repository variables, docs/runbooks/ci-runner-fallback.md):
+#   RUNNER_FLEET=policy (the default) uses `classes` below; github or incredibuild forces that fleet for
+#     every class, on every OS where the fleet has a runner (macOS has only github);
+#   RUNNER_LABEL, when set, replaces the label of every Linux job, whatever the fleet.
+
+# The runner label of each fleet, per OS. Facts, not choices: a label no runner serves leaves a job
+# queued forever, so every label here was seen running a job (docs/benchmarks/ci-runners.md), and the
+# Incredibuild ones are also listed in .github/actionlint.yaml.
+fleets:
+  github:
+    linux: ubuntu-24.04
+    windows: windows-2022 # the same Windows Server version as Incredibuild's, so the two compare
+    macos: macos-26       # arm64; GA on 2026-02-26 (macos-14 was retired on 2026-11-02)
+  incredibuild:
+    linux: incredibuild-ubuntu-2404
+    windows: incredibuild-windows-2022 # 8 GB of memory, against 16 GB on windows-2022
+    # No macOS runner (Incredibuild Console, 2026-11-23).
+
+# Which fleet each job class uses on each OS (ADR 0005).
+classes:
+  heavy-build: # long C/C++ compiles: worth the 2-3.5 min start-up on Linux
+    linux: incredibuild
+    windows: github # MSVC needs memory: 16 GB here, 8 GB on Incredibuild
+    macos: github # no Incredibuild runner
+  docker: # our image builds take a minute or two: shorter than the start-up
+    linux: github
+  e2e: # browsers on three OSes; short runs
+    linux: github
+    windows: github
+    macos: github
+  tf-plan: # Terraform plans: Linux, seconds of CPU
+    linux: github
+  light: # lint, unit tests, the resolver's callers: start-up would dominate
+    linux: github
+    windows: github
+    macos: github
