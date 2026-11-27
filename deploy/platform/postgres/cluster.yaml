@@ -14,6 +14,9 @@ metadata:
     tier: "1"
 spec:
   instances: 1
+  # One instance: a disruption budget would block every node drain (a node group update) instead of
+  # protecting anything. Back on with a second instance.
+  enablePDB: false
   # CloudNativePG's minimal image, the newest 18.7 build at least 7 days old on 2026-11-27, by digest
   imageName: ghcr.io/cloudnative-pg/postgresql:18.7-202611160820-minimal-trixie@sha256:452a15584e2aa1ce658c4ae8538b5dc157eb031d41b82fd19882e0c03bcec01d
   inheritedMetadata:

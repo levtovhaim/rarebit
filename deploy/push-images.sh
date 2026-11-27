@@ -33,7 +33,8 @@ sha="${commit:0:7}"
 
 # A clean checkout of exactly that commit, outside the repo, removed at the end
 build="$(mktemp -d)"
-trap 'git -C "$root" worktree remove --force "$build/src" >/dev/null 2>&1 || true; rm -rf "$build"' EXIT
+# The ECR login can push to every repository for 12 hours: log out when done.
+trap 'docker logout "$registry" >/dev/null 2>&1 || true; git -C "$root" worktree remove --force "$build/src" >/dev/null 2>&1 || true; rm -rf "$build"' EXIT
 git -C "$root" worktree add -q --detach "$build/src" "$commit"
 
 aws ecr get-login-password --region "$region" | docker login --username AWS --password-stdin "$registry" >/dev/null
@@ -41,14 +42,21 @@ aws ecr get-login-password --region "$region" | docker login --username AWS --pa
 for svc in validator game web; do
   local_image="rarebit-$svc:main-$sha"
   remote="$registry/rarebit/$svc:main-$sha"
-  var="$(tr '[:lower:]' '[:upper:]' <<<"$svc")_IMAGE"
-  make -C "$build/src" "$svc-image" "$var=$local_image"
-  docker tag "$local_image" "$remote"
-  # Tags are immutable in ECR: a second push of the same tag fails, unless it's the same image.
-  docker push -q "$remote"
-  digest="$(docker image inspect "$remote" --format '{{range .RepoDigests}}{{println .}}{{end}}' |
-    grep -m1 "^$registry/rarebit/$svc@" | cut -d@ -f2)"
-  [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || die "no digest for $remote"
+  # Tags are immutable: on a re-run (after a failure part way), an image already pushed for this
+  # commit is kept, by its digest, rather than built and pushed again.
+  digest="$(aws ecr describe-images --region "$region" --repository-name "rarebit/$svc" --image-ids "imageTag=main-$sha"     --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+  if [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "kept $remote@$digest (already pushed)"
+  else
+    var="$(tr '[:lower:]' '[:upper:]' <<<"$svc")_IMAGE"
+    make -C "$build/src" "$svc-image" "$var=$local_image"
+    docker tag "$local_image" "$remote"
+    docker push -q "$remote"
+    digest="$(docker image inspect "$remote" --format '{{range .RepoDigests}}{{println .}}{{end}}' |
+      grep -m1 "^$registry/rarebit/$svc@" | cut -d@ -f2)"
+    [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || die "no digest for $remote"
+    echo "pushed $remote@$digest"
+  fi
   mkdir -p "$root/deploy/envs/$env/$svc"
   printf '# Written by deploy/push-images.sh: %s, built from %s.\nimage:\n  tag: main-%s@%s\n' \
     "$svc" "$commit" "$sha" "$digest" >"$root/deploy/envs/$env/$svc/image-tags.yaml"
@@ -56,5 +64,4 @@ for svc in validator game web; do
   if [ "$svc" = validator ]; then
     cp "$root/deploy/envs/$env/validator/image-tags.yaml" "$root/deploy/envs/$env/validator-migrate/image-tags.yaml"
   fi
-  echo "pushed $remote@$digest"
 done

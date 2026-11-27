@@ -10,18 +10,22 @@ terraform {
       source  = "hashicorp/aws"
       version = "6.73.0"
     }
+    # tflint-ignore: terraform_unused_required_providers # pinned for the community modules, see above
     tls = {
       source  = "hashicorp/tls"
       version = "4.4.2"
     }
+    # tflint-ignore: terraform_unused_required_providers # pinned for the community modules, see above
     time = {
       source  = "hashicorp/time"
       version = "0.14.2"
     }
+    # tflint-ignore: terraform_unused_required_providers # pinned for the community modules, see above
     cloudinit = {
       source  = "hashicorp/cloudinit"
       version = "2.4.1"
     }
+    # tflint-ignore: terraform_unused_required_providers # pinned for the community modules, see above
     null = {
       source  = "hashicorp/null"
       version = "3.3.2"

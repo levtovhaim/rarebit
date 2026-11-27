@@ -30,7 +30,7 @@
   - the game's allowed origin (the ALB's hostname), in a ConfigMap;
   - the database URL, in CloudNativePG's own Secret;
   - the registry, from the account ID at install time.
-- **The images** are built from a `main` commit and pushed as `main-<sha7>` by `deploy/push-images.sh`, which writes `deploy/envs/<env>/*/image-tags.yaml`. A person runs it, because people may push main images as break-glass (ADR 0040), until CI builds them (#62).
+- **The images** are built from a `main` commit and pushed as `main-<sha7>` by `deploy/push-images.sh`, before the cluster exists so it doesn't bill while they build, which writes `deploy/envs/<env>/*/image-tags.yaml`. A person runs it, because people may push main images as break-glass (ADR 0040), until CI builds them (#62).
 
 **Argo CD replaces the Helm commands, not the files:** the same charts, versions and values become its Applications.
 

@@ -2,6 +2,10 @@
 # the add-ons every workload needs, and Pod Identity roles for the controllers that call AWS. What runs
 # in the cluster is installed by hand for now (docs/runbooks/eks.md), and by Argo CD later.
 
+# The provider's default_tags (root.hcl) don't reach launch templates' tag specifications or the
+# volumes the EBS CSI driver makes, so those take them explicitly (CLAUDE.md rule 6).
+data "aws_default_tags" "current" {}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "21.30.2"
@@ -30,6 +34,9 @@ module "eks" {
   enable_irsa                 = false
   # The environment is torn down every night (rule 2: by a person).
   deletion_protection = false
+  # Never into extended support (CLAUDE.md rule 6): at the end of standard support, EKS upgrades the
+  # cluster instead of billing it at the extended rate.
+  upgrade_policy = { support_type = "STANDARD" }
 
   # Each add-on's version is EKS's default for 1.37 on 2026-11-27 (aws eks describe-addon-versions),
   # pinned, so a new cluster gets the same versions as the last one (rule 4).
@@ -47,8 +54,14 @@ module "eks" {
     kube-proxy             = { addon_version = "v1.37.0-eksbuild.39" }
     coredns                = { addon_version = "v1.14.7-eksbuild.35" }
     # Volumes for Postgres (CloudNativePG); its controller calls the EC2 API through Pod Identity.
+    # EKS has no default StorageClass since 1.30: the add-on's gp3 class is made the default, so
+    # Postgres's volume claim gets a volume.
     aws-ebs-csi-driver = {
       addon_version = "v1.68.1-eksbuild.1"
+      configuration_values = jsonencode({
+        defaultStorageClass = { enabled = true }
+        controller          = { extraVolumeTags = data.aws_default_tags.current.tags }
+      })
       pod_identity_association = [{
         role_arn        = module.ebs_csi_pod_identity.iam_role_arn
         service_account = "ebs-csi-controller-sa"
@@ -63,9 +76,18 @@ module "eks" {
       # On-demand: a spot interruption during a game is what this environment exists to avoid tonight.
       # Karpenter, with spot first, replaces this node group later.
       capacity_type = "ON_DEMAND"
-      min_size      = var.node_count
-      max_size      = var.node_count + 1
-      desired_size  = var.node_count
+      # The nodes, their volumes and network interfaces carry the project's tags.
+      launch_template_tags = data.aws_default_tags.current.tags
+      # IMDSv2 only, and one network hop: a pod (not on the host network) can't reach the node's
+      # credentials. The module's default today, written down so an upgrade can't change it.
+      metadata_options = {
+        http_endpoint               = "enabled"
+        http_tokens                 = "required"
+        http_put_response_hop_limit = 1
+      }
+      min_size     = var.node_count
+      max_size     = var.node_count + 1
+      desired_size = var.node_count
     }
   }
 }

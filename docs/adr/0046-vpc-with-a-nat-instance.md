@@ -16,10 +16,11 @@
 
 **`infra/modules/network`:** one VPC per environment, a /16, across two zones.
 
-- **Public subnets** (a /24 each) hold the ALB and the NAT instance. They hand out no public IPs: the NAT instance uses an Elastic IP, and the ALB its own addresses. They're tagged `kubernetes.io/role/elb` for the AWS Load Balancer Controller.
+- **Public subnets** (a /24 each) hold the ALB and the NAT instance. The subnets themselves hand out no public IPs. The ALB has its own addresses, and the NAT instance its Elastic IP, plus the public address fck-nat's launch template gives it. They're tagged `kubernetes.io/role/elb` for the AWS Load Balancer Controller.
 - **Private subnets** (a /20 each) hold the nodes and the pods. They're tagged `kubernetes.io/role/internal-elb`, and `karpenter.sh/discovery` for later.
 - **Routes:** the public route table sends `0.0.0.0/0` to the internet gateway. The private one sends it through the NAT instance.
-- **The NAT instance is fck-nat** (`RaJiska/fck-nat` 1.6.1) on a t4g.nano, in an Auto Scaling group of one that replaces it when it fails. Its static network interface keeps the Elastic IP and the private route across a replacement. It allows no SSH; Session Manager is the way in if ever needed.
+- **The NAT instance is fck-nat** (`RaJiska/fck-nat` 1.6.1, its AMI pinned: `fck-nat-al2023-hvm-1.4.0-20261109-arm64-ebs`, not whatever was published last) on a t4g.nano, in an Auto Scaling group of one that replaces it when it fails. Its static network interface keeps the Elastic IP and the private route across a replacement. It allows no SSH; Session Manager is the way in if ever needed.
+- **The VPC's default security group has no rules,** so anything put in it by mistake gets no traffic.
 - **An S3 gateway endpoint** (free) on the private route table, so ECR's image layers, which are stored in S3, skip the NAT instance.
 - **No interface endpoints:** at $0.012/h per zone each (Price List API, 2026-11-27), they would cost more than the NAT instance.
 
@@ -40,7 +41,7 @@
 - **Bad / risks:**
   - **One instance in one zone is a single point of failure for outbound traffic.** While the ASG replaces it (a few minutes), pods can't pull new images or reach the internet. Running pods keep serving players, since inbound goes through the ALB.
   - **A t4g.nano is a small, burstable instance** with modest network bandwidth: enough for image pulls and the game's egress, not for heavy downloads. A larger t4g type is one variable away.
-  - **Patching:** the instance runs fck-nat's AMI, and a replacement takes the newest. Nothing patches a running one.
+  - **Patching:** the instance runs the pinned fck-nat AMI; a newer one comes only by changing `nat_ami_id`. Nothing patches a running one.
 - **Follow-ups:** none for now. A NAT Gateway per zone is the answer if the environment ever stays up for players.
 
 ## How we'll know it was right

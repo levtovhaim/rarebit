@@ -195,6 +195,14 @@ run "the_plan_role_reads_configuration_and_writes_nothing" {
   assert {
     condition = anytrue([
       for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Resource == "*" && length(setsubtract(["eks:DescribeCluster", "eks:ListAccessEntries", "eks:DescribeAccessEntry"], flatten([s.Action]))) == 0
+    ])
+    error_message = "The tf_plan role can't describe a cluster or its access entries: they hold the operator's home address and IAM user."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
       s.Effect == "Deny" && s.Action == "s3:GetObject*" && try(s.NotResource, "") == "arn:aws:s3:::test-tfstate/*"
     ])
     error_message = "The tf_plan role reads objects only in the state bucket."

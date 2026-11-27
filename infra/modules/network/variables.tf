@@ -38,6 +38,17 @@ variable "private_subnets" {
   }
 }
 
+variable "nat_ami_id" {
+  description = "The fck-nat AMI the NAT instance runs, pinned rather than the newest one published: fck-nat-al2023-hvm-1.4.0-20261109-arm64-ebs (2026-11-09) in eu-central-1. Bump it deliberately."
+  type        = string
+  default     = "ami-02e293c9250757cfa"
+
+  validation {
+    condition     = can(regex("^ami-[0-9a-f]{8,17}$", var.nat_ami_id))
+    error_message = "nat_ami_id is an AMI ID."
+  }
+}
+
 variable "cluster_name" {
   description = "The EKS cluster that will use this VPC: its subnet tags (load balancers, Karpenter) name it."
   type        = string

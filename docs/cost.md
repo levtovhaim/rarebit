@@ -24,10 +24,10 @@ Prod (`infra/live/prod`, ADRs 0046–0048) exists only while a session runs: it'
 | EKS control plane (standard support) | 0.100 |
 | 2 × t3.medium nodes, on-demand | 0.096 |
 | ALB (hourly, plus about 0.004 of capacity units at this traffic) | 0.031 |
-| 3 public IPv4 addresses (the NAT instance's Elastic IP, the ALB's two) | 0.015 |
+| 4 public IPv4 addresses (the NAT instance's Elastic IP and the public address its launch template also gives it, the ALB's two) | 0.020 |
 | NAT instance (t4g.nano, fck-nat) | 0.005 |
 | EBS: the nodes' and the NAT instance's root volumes and Postgres's 2 GiB, about 50 GB | 0.007 |
-| **Total** | **≈ 0.25** |
+| **Total** | **≈ 0.26** |
 
 No NAT Gateway ($0.052/h and $0.052/GB, ADR 0046), no interface endpoints ($0.012/h per zone each), no control-plane logs. Infracost isn't wired into pull requests yet (#61), so this table is the estimate; the next day's Cost Explorer actuals are compared with it.
 

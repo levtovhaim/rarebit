@@ -29,6 +29,10 @@
   - the Pod Identity agent, kube-proxy and CoreDNS;
   - the EBS CSI driver.
 - **Pod Identity** (`terraform-aws-modules/eks-pod-identity` 2.11.0) gives the EBS CSI driver and the AWS Load Balancer Controller their IAM roles: no OIDC provider, no service account annotations.
+- **Its state is private** (ADR 0042): it holds the allowed address and the admin's IAM user, so `prod/eks` is in `private_state_units`, the unit refuses to run otherwise, `admin_cidrs` is `sensitive`, and the pull request plan role may not describe a cluster or its access entries.
+- **Never extended support:** `upgrade_policy` is `STANDARD`, so at the end of standard support EKS upgrades the cluster instead of billing the extended rate (rule 6).
+- **Storage:** EKS has no default StorageClass since 1.30, so the EBS CSI add-on's gp3 class is made the default.
+- **IMDS:** the nodes' launch template requires IMDSv2 with one network hop, written down rather than left to the module's default, so a pod off the host network can't reach the node's credentials.
 - **Cost choices:** no control-plane logs, no customer-managed KMS key (EKS already encrypts secrets with an AWS-owned key), no IRSA OIDC provider, no deletion protection (the environment is destroyed every night, by a person).
 - **Live units:** `infra/live/prod/network` and `infra/live/prod/eks`. The `eks` unit reads the VPC through a Terragrunt `dependency` block, with mock outputs only for `init` and `validate`.
 

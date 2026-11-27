@@ -50,8 +50,16 @@ module "network" {
 
 | Name | Type |
 | ---- | ---- |
+| [aws_default_security_group.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/default_security_group) | resource |
 | [aws_eip.nat](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/eip) | resource |
 | [aws_internet_gateway.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/internet_gateway) | resource |
+| [aws_route.public_internet](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/route) | resource |
+| [aws_route_table.private](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/route_table) | resource |
+| [aws_route_table.public](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/route_table) | resource |
+| [aws_route_table_association.private](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/route_table_association) | resource |
+| [aws_route_table_association.public](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/route_table_association) | resource |
+| [aws_subnet.private](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/subnet) | resource |
+| [aws_subnet.public](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/subnet) | resource |
 | [aws_vpc.this](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/vpc) | resource |
 | [aws_vpc_endpoint.s3](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/resources/vpc_endpoint) | resource |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/data-sources/region) | data source |
@@ -65,6 +73,7 @@ module "network" {
 | name | The name of the VPC and the prefix of everything in it, e.g. rarebit-prod. | `string` | n/a | yes |
 | private\_subnets | Availability zone => IPv4 range of the private subnet there: the nodes and the pods. | `map(string)` | n/a | yes |
 | public\_subnets | Availability zone => IPv4 range of the public subnet there: the load balancer and the NAT instance. | `map(string)` | n/a | yes |
+| nat\_ami\_id | The fck-nat AMI the NAT instance runs, pinned rather than the newest one published: fck-nat-al2023-hvm-1.4.0-20261109-arm64-ebs (2026-11-09) in eu-central-1. Bump it deliberately. | `string` | `"ami-02e293c9250757cfa"` | no |
 | nat\_instance\_type | The NAT instance's type (fck-nat on Graviton, arm64). A t4g.nano is enough for image pulls and the game's egress. | `string` | `"t4g.nano"` | no |
 
 ## Outputs

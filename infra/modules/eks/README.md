@@ -38,6 +38,12 @@ module "eks" {
 | time | 0.14.2 |
 | tls | 4.4.2 |
 
+## Providers
+
+| Name | Version |
+| ---- | ------- |
+| aws | 6.73.0 |
+
 ## Modules
 
 | Name | Source | Version |
@@ -46,11 +52,17 @@ module "eks" {
 | eks | terraform-aws-modules/eks/aws | 21.30.2 |
 | lb\_controller\_pod\_identity | terraform-aws-modules/eks-pod-identity/aws | 2.11.0 |
 
+## Resources
+
+| Name | Type |
+| ---- | ---- |
+| [aws_default_tags.current](https://registry.terraform.io/providers/hashicorp/aws/6.73.0/docs/data-sources/default_tags) | data source |
+
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| admin\_cidrs | The addresses allowed to reach the cluster's public API endpoint: the operators' own IPs (/32). CI never talks to the cluster. | `list(string)` | n/a | yes |
+| admin\_cidrs | The addresses allowed to reach the cluster's public API endpoint: the operators' own IPs (/32). CI never talks to the cluster. Personal data: the unit that sets it is a private state unit (ADR 0042). | `list(string)` | n/a | yes |
 | kubernetes\_version | The EKS Kubernetes version: the newest in standard support (CLAUDE.md rule 6: never one in extended support). | `string` | n/a | yes |
 | name | The cluster's name, e.g. rarebit-prod. It also prefixes its IAM roles. | `string` | n/a | yes |
 | subnet\_ids | The private subnets for the nodes, the pods and the control plane's network interfaces, in at least two zones. | `list(string)` | n/a | yes |

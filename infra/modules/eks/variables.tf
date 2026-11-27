@@ -34,8 +34,9 @@ variable "subnet_ids" {
 }
 
 variable "admin_cidrs" {
-  description = "The addresses allowed to reach the cluster's public API endpoint: the operators' own IPs (/32). CI never talks to the cluster."
+  description = "The addresses allowed to reach the cluster's public API endpoint: the operators' own IPs (/32). CI never talks to the cluster. Personal data: the unit that sets it is a private state unit (ADR 0042)."
   type        = list(string)
+  sensitive   = true
 
   validation {
     condition = length(var.admin_cidrs) > 0 && alltrue([

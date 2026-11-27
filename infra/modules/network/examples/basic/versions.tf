@@ -9,6 +9,7 @@ terraform {
       source  = "hashicorp/aws"
       version = "6.73.0"
     }
+    # tflint-ignore: terraform_unused_required_providers # pinned for fck-nat, see above
     cloudinit = {
       source  = "hashicorp/cloudinit"
       version = "2.4.1"

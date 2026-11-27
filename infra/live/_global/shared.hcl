@@ -22,10 +22,12 @@ locals {
     tf_plan = "gha-tf-plan" # pull requests: terraform plan, read-only
   }
 
-  # Units whose state holds personal data (the alert address): the pull request plan role may not read
-  # their state, and the plan workflow must skip them (ADR 0042, #62). List a unit here and apply
-  # github-oidc before the unit's first apply.
-  private_state_units = ["_global/cost-alerts"]
+  # Units whose state holds personal data: the pull request plan role may not read their state, and the
+  # plan workflow must skip them (ADR 0042, #62). List a unit here and apply github-oidc before the
+  # unit's first apply.
+  #   _global/cost-alerts: the alert address
+  #   prod/eks: the operator's home address (the API's allowed /32) and IAM user (its access entry)
+  private_state_units = ["_global/cost-alerts", "prod/eks"]
 
   # The repository on GitHub whose workflows may take these roles, with the numeric IDs GitHub puts
   # in its tokens' sub (immutable subject, ADR 0038). They're public: gh api repos/levtovhaim/rarebit
