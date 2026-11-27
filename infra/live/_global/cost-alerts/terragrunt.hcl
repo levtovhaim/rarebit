@@ -1,5 +1,6 @@
 # The account's cost guardrails (ADR 0041): three budgets and an anomaly monitor, made in the console
-# on 2026-11-23/24 and imported here unchanged, except for tags and the anomaly alert's threshold.
+# on 2026-11-23/24 and imported on 2026-11-27, with tags added. The anomaly subscription was replaced
+# then, for its new name and threshold.
 #
 # The alert address is personal data: it comes from RAREBIT_ALERT_EMAIL in .mise.local.toml (git
 # ignores it), the module marks it sensitive, and this unit's state, which holds it, is the one state
@@ -65,34 +66,4 @@ inputs = {
   anomaly_monitor_name = "anomaly monitor rarebit"
   # Renamed from the console's name, which was a person's IAM user name.
   anomaly_subscription_name = "rarebit daily anomaly alerts"
-}
-
-# The import, once: the console-made budgets, monitor and subscription become this unit's resources
-# instead of new ones. The IDs contain the account ID, so they're written at run time, not in git.
-# Remove this block after the first apply (ADR 0041).
-generate "imports" {
-  path      = "imports.generated.tf"
-  if_exists = "overwrite_terragrunt"
-  contents  = <<-EOF
-    import {
-      to = aws_budgets_budget.this["monthly"]
-      id = "${local.account_id}:My Monthly Cost Budget"
-    }
-    import {
-      to = aws_budgets_budget.this["daily"]
-      id = "${local.account_id}:daily cost budget"
-    }
-    import {
-      to = aws_budgets_budget.this["credits"]
-      id = "${local.account_id}:Credit budget"
-    }
-    import {
-      to = aws_ce_anomaly_monitor.account
-      id = "arn:aws:ce::${local.account_id}:anomalymonitor/fd506b51-6ee5-4e80-972a-12a916e5960e"
-    }
-    import {
-      to = aws_ce_anomaly_subscription.account
-      id = "arn:aws:ce::${local.account_id}:anomalysubscription/11db9351-955a-424c-820b-e043d8911311"
-    }
-  EOF
 }
