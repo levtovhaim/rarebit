@@ -99,7 +99,7 @@ Egress, from the cold run:
 5. **The Windows runner has half the RAM** of the GitHub-hosted one (8 vs 16 GB). Memory-hungry builds (MSVC with many parallel jobs) need checking before routing them there.
 6. **Network:** lower download throughput and higher latency to github.com on Incredibuild.
 
-**Input for the runner policy (a proposal; [ADR 0005](../adr/0005-ci-runner-fleets-by-job-class.md) is decided when the policy is built):**
+**Input for the runner policy** (decided on 2026-11-27 in [ADR 0005](../adr/0005-ci-runner-fleets-by-job-class.md) and [`ci/runner-policy.yaml`](../../ci/runner-policy.yaml): `heavy-build` on Linux to Incredibuild, everything else to GitHub-hosted; the proposal was):
 - long C/C++ and other heavy compiles (`heavy-build`) → Incredibuild
 - `light`, `tf-plan` and short `e2e` jobs → GitHub-hosted
 - `docker` → decided after measuring real images
