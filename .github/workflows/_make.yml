@@ -1,0 +1,123 @@
+name: _make
+
+# Reusable: runs make targets with the tools pinned in .mise.toml, on the runner the policy picks for a
+# job class (ADR 0005). CI runs the same commands, with the same versions, as a developer (ADR 0044).
+#
+#   jobs:
+#     native:
+#       needs: runners
+#       uses: ./.github/workflows/_make.yml
+#       with:
+#         runner-labels: ${{ needs.runners.outputs.labels }}
+#         class: heavy-build
+#         tools: cmake ninja
+#         targets: native
+#
+# mise itself is a release binary checked against the SHA-256 below. It installs only the tools named
+# in `tools`, into the job's temporary directory, and only their directories go on PATH: no mise shims,
+# and nothing from .mise.toml's [env] (AWS_PROFILE and the Terragrunt settings are for people's
+# machines; a shim would set them for every tool it runs). Nothing is restored from the Actions cache:
+# a job on a vendor runner can write cache entries whatever this file says, so no job reads one (ADR
+# 0044). This workflow never gets id-token: write; a job that takes an AWS role has its own workflow.
+
+on:
+  workflow_call:
+    inputs:
+      runner-labels:
+        description: The resolver's labels output (.github/workflows/_runners.yml)
+        type: string
+        required: true
+      class:
+        description: The job's class in ci/runner-policy.yaml
+        type: string
+        required: true
+      os:
+        description: linux (the only OS this workflow installs mise for so far)
+        type: string
+        default: linux
+      tools:
+        description: The .mise.toml tools to install, by their names there, separated by spaces
+        type: string
+        required: true
+      targets:
+        description: The make targets to run, in order, separated by spaces
+        type: string
+        required: true
+      fetch-depth:
+        description: The commits to fetch; 0 for the whole history (make check's gitleaks hook needs origin/main)
+        type: number
+        default: 1
+      github-token:
+        description: Give make the run's token as GITHUB_TOKEN (tflint fetches its ruleset from GitHub's API)
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: Minutes from when a runner picks the job up (queue time doesn't count)
+        type: number
+        default: 20
+
+permissions: {}
+
+jobs:
+  make:
+    name: make ${{ inputs.targets }}
+    runs-on: ${{ fromJSON(inputs.runner-labels)[inputs.class][inputs.os] }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      # The newest mise release at least 7 days old on 2026-11-27 (.claude/skills/dependency-versioning).
+      # The hash is the release's SHASUMS256.txt entry for this file, checked against a download.
+      MISE_VERSION: 2026.11.10
+      MISE_SHA256_LINUX_X64: 70a3cf7776ea97cfdae0b4c49ef348782c454b43b0bb77823cf029840c332946
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ inputs.fetch-depth }}
+
+      - name: Install mise ${{ env.MISE_VERSION }}
+        run: |
+          if [ "$RUNNER_OS" != Linux ] || [ "$RUNNER_ARCH" != X64 ]; then
+            echo "::error::_make.yml installs mise on Linux x64 only so far: add the release's SHA-256 for $RUNNER_OS $RUNNER_ARCH"
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/mise/release"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/mise.tar.gz" \
+            "https://github.com/jdx/mise/releases/download/v$MISE_VERSION/mise-v$MISE_VERSION-linux-x64.tar.gz"
+          echo "$MISE_SHA256_LINUX_X64  $dir/mise.tar.gz" | sha256sum --check --strict -
+          tar -xzf "$dir/mise.tar.gz" -C "$dir"
+          "$dir/mise/bin/mise" --version
+          echo "$dir/mise/bin" >>"$GITHUB_PATH"
+          # mise's files go in the job's own temporary directory, which the runner empties after the job.
+          printf 'MISE_%s_DIR=%s\n' DATA "$RUNNER_TEMP/mise/data" CACHE "$RUNNER_TEMP/mise/cache" \
+            STATE "$RUNNER_TEMP/mise/state" >>"$GITHUB_ENV"
+
+      - name: Install the tools
+        env:
+          TOOLS: ${{ inputs.tools }}
+          # For GitHub's API while installing (release downloads), not passed to later steps
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+          MISE_YES: "1"
+        run: |
+          read -ra tools <<<"$TOOLS"
+          mise install "${tools[@]}"
+          mise bin-paths >>"$GITHUB_PATH"
+          mise ls --installed
+
+      - name: make ${{ inputs.targets }}
+        env:
+          TARGETS: ${{ inputs.targets }}
+          GITHUB_TOKEN: ${{ inputs.github-token && github.token || '' }}
+          # On a push to main, make check's gitleaks hook scans the pushed commits (the squash commit's
+          # message among them); elsewhere it scans from the merge base with origin/main.
+          GITLEAKS_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          read -ra targets <<<"$TARGETS"
+          make "${targets[@]}"

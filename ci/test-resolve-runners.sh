@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for ci/resolve-runners.sh, run by make check (the runner-policy-tests hook) and, on the runner
+# Tests for ci/resolve-runners.sh, run by make check (the ci-tests hook) and, on the runner
 # image itself, by the runner policy workflow.
 #   Part 1: the resolver's rules (precedence, fallbacks, refusals, outputs) on a fixture policy.
 #   Part 2: the workflows: no runs-on label outside the resolver.
@@ -172,8 +172,8 @@ check "the real policy resolves (policy)" 0 "" RUNNER_FLEET=policy
 check "the real policy resolves (github)" 0 "" RUNNER_FLEET=github
 check "the real policy resolves (incredibuild)" 0 "" RUNNER_FLEET=incredibuild
 
-assert "the classes are heavy-build, docker, e2e, tf-plan and light" \
-  test "$(q '.classes | keys | sort' | jq -c .)" = '["docker","e2e","heavy-build","light","tf-plan"]'
+assert "the classes are heavy-build, docker, e2e, tf-plan, gate and light" \
+  test "$(q '.classes | keys | sort' | jq -c .)" = '["docker","e2e","gate","heavy-build","light","tf-plan"]'
 assert "every class runs on Linux" \
   test "$(q '[.classes[] | has("linux")] | all')" = true
 assert "tf-plan runs on Linux only: Terraform plans are Linux jobs" \
@@ -188,6 +188,8 @@ assert "macOS goes to GitHub-hosted: Incredibuild has no macOS runner" \
   test "$(q '[.classes[] | select(has("macos")) | .macos == "github"] | all')" = true
 assert "docker and tf-plan are github_only: they will take AWS roles, and a token minted on the vendor's machine works as well as one minted on GitHub's (ADR 0038)" \
   test "$(q '[(.github_only // [])[] | select(. == "docker" or . == "tf-plan")] | length')" = 2
+assert "gate is github_only and Linux only: a vendor's runner never picks the checks or decides ci-ok (ADR 0043)" \
+  test "$(q '.' | jq '((.github_only // []) | index("gate")) != null and (.classes.gate | keys) == ["linux"]')" = true
 assert "the github fleet's labels are GitHub-hosted labels" \
   test "$(q '[.fleets.github[] | test("^(ubuntu|windows|macos)-[0-9]")] | all')" = true
 assert "every fleet has a runner group" \

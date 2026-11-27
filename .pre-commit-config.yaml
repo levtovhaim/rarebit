@@ -26,9 +26,10 @@ repos:
       - id: gitleaks
         name: gitleaks (branch commits, uncommitted changes, new files)
         # Scans everything this branch would add, staged or not:
-        #   1. commits since the base: GITLEAKS_BASE if set (CI passes the PR's base SHA; "all"
-        #      scans every commit), else the merge base with origin/main. No base means a shallow
-        #      or remote-less clone, and the hook fails instead of quietly scanning less.
+        #   1. commits since the base: GITLEAKS_BASE if set ("all" scans every commit), else the
+        #      merge base with origin/main (CI checks out the whole history, so origin/main is
+        #      there). No base means a shallow or remote-less clone, and the hook fails instead of
+        #      quietly scanning less.
         #   2. lines added to tracked files, from a diff that ignores local diff settings
         #      (external diff tools, textconv, colour) and shows "binary" files as text
         #   3. new files that aren't ignored. Ignored files (a local .env) are skipped on purpose:
@@ -98,9 +99,9 @@ repos:
         language: system
         files: ^\.claude/skills/dependency-versioning/scripts/
         pass_filenames: false
-      - id: runner-policy-tests
-        name: runner policy tests (ci/runner-policy.yaml and its resolver, ADR 0005)
-        entry: bash ci/test-resolve-runners.sh
+      - id: ci-tests
+        name: CI script tests (ci/test-*.sh; ADRs 0005, 0043)
+        entry: bash -c 'rc=0; for t in ci/test-*.sh; do bash "$t" || rc=1; done; exit $rc'
         language: system
         files: ^(ci/|\.github/)
         pass_filenames: false

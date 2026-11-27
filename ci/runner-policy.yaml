@@ -31,11 +31,12 @@ runner_groups:
   incredibuild: incredibuild
 
 # Classes that hold credentials (ADR 0005): they take AWS roles through OIDC (ADR 0038), and the roles
-# can't tell a token minted on the vendor's machine from one minted on GitHub's. Neither override
-# moves them.
+# can't tell a token minted on the vendor's machine from one minted on GitHub's. And the class that
+# decides which checks run and whether a pull request may merge (ADR 0043). Neither override moves them.
 github_only:
   - docker # pushes images with the PR and main ECR roles
   - tf-plan # plans with gha-tf-plan
+  - gate # ci.yml's changes and ci-ok jobs, and their scripts' tests
 
 # Which fleet each job class uses on each OS (ADR 0005).
 classes:
@@ -50,6 +51,8 @@ classes:
     windows: github
     macos: github
   tf-plan: # Terraform plans: Linux, seconds of CPU
+    linux: github
+  gate: # picks the checks and decides ci-ok (ADR 0043): seconds of work, never on a vendor's runner
     linux: github
   light: # lint, unit tests, the resolver's callers: start-up would dominate
     linux: github

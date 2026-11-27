@@ -12,7 +12,7 @@ Each job takes its `runs-on` label from the resolver (`.github/workflows/_runner
 | `RUNNER_FLEET` | `policy` (default, also when unset), `github`, `incredibuild` | `github` or `incredibuild` forces that fleet for every class, on every OS where it has a runner (macOS has only `github`) |
 | `RUNNER_LABEL` | one of the Linux labels in `fleets`, or unset | replaces the label of every Linux job; with `RUNNER_FLEET=github`, only a GitHub-hosted label applies |
 
-Classes in the policy's `github_only` list (`docker`, `tf-plan`: they hold AWS credentials) stay on GitHub-hosted runners whatever the variables say. The runner measurements (`spike-runner.yml`) name their labels on purpose, so the switch doesn't move them: don't run them during a vendor outage.
+Classes in the policy's `github_only` list (`docker`, `tf-plan`: they hold AWS credentials; `gate`: it decides which checks run and whether a pull request may merge, ADR 0043) stay on GitHub-hosted runners whatever the variables say. The runner measurements (`spike-runner.yml`) name their labels on purpose, so the switch doesn't move them: don't run them during a vendor outage.
 
 ## What it means
 
