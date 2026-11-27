@@ -6,11 +6,30 @@
   - the add-ons in `deploy/platform`;
   - the services in `deploy/apps` with `deploy/envs/prod`.
 - **Severity:** page while players are on it, ticket otherwise
-- **Last fired on purpose:** not yet; the first bring-up and teardown are recorded here with their dates.
+- **Last fired on purpose:** 2026-11-27.
+  - Brought up by hand with the steps below.
+  - The game was played on a phone and by the bots: 10 rounds, answers in 78 ms at the 95th percentile.
+  - Torn down with `bash platform/env.sh down`: the leak check found nothing.
 
 Everything here changes AWS or the cluster, so a person runs it (CLAUDE.md rule 2), in WSL, from the repo root (mise sets `AWS_PROFILE=rarebit` there), with `aws login --profile rarebit` done. Two values come from `.mise.local.toml`, which git ignores:
 - `RAREBIT_AWS_ACCOUNT_ID`;
 - `RAREBIT_ADMIN_CIDR`, your own address as a `/32` (`curl -s https://checkip.amazonaws.com`). It's the only address the cluster's API answers.
+
+**One command each way** (`platform/env.sh`, ADR 0049). It runs this runbook's steps in order, with the waits and the leak check:
+
+```bash
+bash platform/env.sh up       # Bring up, steps 2 to 10, then the page check (about 25 minutes)
+bash platform/env.sh down     # Tear down, steps 1 to 6 (about 15 minutes)
+bash platform/env.sh status   # read-only: the cluster, the game's link, and what exists that bills
+```
+
+- **Before anything else,** it checks the tools, that you're logged in to the project account, and that `RAREBIT_ADMIN_CIDR` is your current address.
+- **Run `aws login --profile rarebit` right before,** so the login lasts the whole run.
+- **Without `--yes`,** Terraform shows each plan and asks. **With `--yes`,** nothing asks.
+- **When it stops,** it names the step. Fix the cause with the table below, then run the same command again. Every step can run again.
+- **It doesn't do Bring up steps 0 and 1.** `up` checks that the images exist and stops if they don't.
+
+The steps below are what the script does. Use them to understand a failure, or to run one step by hand.
 
 **Cost while it's up:** about $0.36/h (`docs/cost.md`). That's the control plane, two c7i-flex.large nodes, the NAT instance and the public addresses, the ALB and the volumes. Tear it down when the session ends.
 
@@ -18,6 +37,9 @@ Everything here changes AWS or the cluster, so a person runs it (CLAUDE.md rule 
 
 | Symptom | What's wrong |
 |---|---|
+| `env.sh` stops: `RAREBIT_ADMIN_CIDR is …, but your address is now …` | Your public address changed. Set the new `/32` in `.mise.local.toml`, then run again. `down` needs it too: without `kubectl`, nothing would delete the ALB |
+| `env.sh` stops: `logged in to another AWS account` | `AWS_PROFILE` or your login points elsewhere. Run `aws login --profile rarebit` |
+| `env.sh` stops at `still there` (the ALB, target groups, security groups or a volume) | The controller didn't delete them in time. Check its logs, then delete them by hand (Tear down, step 6) and run again |
 | `terragrunt apply` in `eks` fails with `RAREBIT_ADMIN_CIDR` | The variable isn't set, or isn't a `/32` |
 | `terragrunt` in `eks` fails with `prod/eks is not in private_state_units` | Someone took it out of `infra/live/_global/shared.hcl`: its state would become readable by pull request plans (ADR 0042) |
 | The `eks` apply fails with an error about the account's plan | The account's plan doesn't allow it. Destroy the network at once (Tear down, step 5), so nothing bills |
@@ -204,6 +226,7 @@ The order matters. The LB controller created the ALB, its target groups and secu
 
 ## Prevention
 
-- `plat env up` and `plat env down` will run these steps in this order, with the waits and the leak check, and the nightly teardown will run `down`.
+- `platform/env.sh` runs these steps in this order, with the waits and the leak check (ADR 0049).
+- `plat env up` and `plat env down` will call it, and the nightly teardown will run `down --yes`.
 - Argo CD replaces steps 4 to 10 (ADR 0048).
-- Until both exist, follow this runbook, and set no `KEEP_ALIVE_UNTIL`: nothing tears this down for you.
+- Until the nightly teardown exists, run `down` at the end of every session, and set no `KEEP_ALIVE_UNTIL`: nothing tears this down for you.

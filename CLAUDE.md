@@ -51,14 +51,14 @@
 - `make deploy`: `helm lint` the shared chart, render every service in `deploy/apps` with it, validate the manifests with kubeconform, and check them against the golden path and each service's shutdown timing (`deploy/test/render.sh`, ADR 0045). Run it whenever `deploy/` or `catalog/` changes.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git. Planned: until it's built, both targets exit 2.
 - `plat doctor`: verify tools, versions, AWS identity and kube context.
-- `plat env up` / `plat env down`: create or destroy the AWS platform. **A human runs it or approves the exact command** (rule 2).
+- `plat env up` / `plat env down`: create or destroy the AWS platform. **A human runs it or approves the exact command** (rule 2). Until `plat` exists, `bash platform/env.sh up` / `down` does it (ADR 0049), and `bash platform/env.sh status` shows what exists (read-only); runbook `docs/runbooks/eks.md`.
 - PR labels: `preview` creates the PR's preview environment and runs the test arena; `arena:full` adds the full persona tournament.
 
 ## Rules for every contributor (humans and agents)
 1. **PRs only.** Never push to `main`. One issue = one small PR. Use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `infra:`).
 2. **Infra-changing commands need a human's decision.** Never run these on your own:
    - `terraform` or `terragrunt` `apply`/`destroy`/`import`/`state`/`force-unlock`/`refresh`/`taint`/`untaint`, and `init -migrate-state`
-   - `plat env up` / `plat env down`
+   - `plat env up` / `plat env down`, and `bash platform/env.sh up` / `down`
    - `kubectl apply`/`delete` outside your own preview namespace
    - `helm install`/`upgrade`/`uninstall`/`rollback`
    - any `aws` command that creates, changes or deletes something

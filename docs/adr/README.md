@@ -52,3 +52,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0046](0046-vpc-with-a-nat-instance.md) | Each environment's VPC: two zones, public and private subnets, a NAT instance instead of a NAT Gateway | accepted |
 | [0047](0047-eks-cluster-shape.md) | An environment's EKS cluster: a private-node cluster with an API restricted to the operator, a small on-demand node group, and Pod Identity | accepted |
 | [0048](0048-platform-add-ons-by-hand-until-argo-cd.md) | Until Argo CD, the in-cluster add-ons and the services are installed by a person with Helm, from pinned versions and values in git | accepted |
+| [0049](0049-prod-up-and-down-as-one-script.md) | Prod's bring-up and teardown are one bash script, which `plat env` will call | accepted |
