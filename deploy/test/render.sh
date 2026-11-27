@@ -191,6 +191,9 @@ for set in - "${environments[@]}"; do
     test "$(jq '[.[].a | del(.["alb.ingress.kubernetes.io/group.order"], .["alb.ingress.kubernetes.io/target-group-attributes"])] | unique | length' <<<"$ingresses")" = 1
   assert "$label: every Ingress targets pod IPs and checks /readyz" \
     test "$(jq '[.[].a | .["alb.ingress.kubernetes.io/target-type"] == "ip" and .["alb.ingress.kubernetes.io/healthcheck-path"] == "/readyz"] | all' <<<"$ingresses")" = true
+  # AWS's own rule, which no schema check sees: CreateTargetGroup fails unless timeout < interval.
+  assert "$label: every health check times out before its next interval" \
+    test "$(jq '[.[].a | (.["alb.ingress.kubernetes.io/healthcheck-timeout-seconds"] // "5" | tonumber) < (.["alb.ingress.kubernetes.io/healthcheck-interval-seconds"] // "15" | tonumber)] | all' <<<"$ingresses")" = true
   assert "$label: the game takes /socket.io, before the web UI's /" \
     test "$(jq -c 'map({(.svc): {paths, order: (.a["alb.ingress.kubernetes.io/group.order"] | tonumber)}}) | add | [.game.paths, .web.paths, .game.order < .web.order]' <<<"$ingresses")" = '[["/socket.io"],["/"],true]'
   assert "$label: no Ingress routes to a metrics port" test "$(jq '[.[].ports[]] | index("metrics") == null' <<<"$ingresses")" = true
