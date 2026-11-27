@@ -46,3 +46,5 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0040](0040-ecr-repository-policies.md) | ECR repositories enforce who may push and delete with deny-only repository policies, and people keep both as break-glass | accepted |
 | [0041](0041-cost-alerts-imported.md) | The cost budgets and anomaly monitor are Terraform, imported from the console, not recreated | accepted |
 | [0042](0042-private-state-units.md) | A unit whose state holds personal data is private: its value comes from the environment, and pull request plans can't read it | accepted |
+| [0043](0043-pull-request-checks-by-path-with-ci-ok.md) | Pull requests run lint and the checks their changes need, summed up in one check, ci-ok | accepted |
+| [0044](0044-ci-tools-from-mise-without-its-env.md) | CI installs the tools pinned in .mise.toml with mise-action, and puts them on PATH without mise's [env] | accepted |

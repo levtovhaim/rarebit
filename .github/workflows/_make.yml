@@ -1,0 +1,100 @@
+name: _make
+
+# Reusable: runs make targets with the tools pinned in .mise.toml, on the runner the policy picks for a
+# job class (ADR 0005). CI runs the same commands, with the same versions, as a developer (ADR 0044).
+#
+#   jobs:
+#     native:
+#       needs: runners
+#       uses: ./.github/workflows/_make.yml
+#       with:
+#         runner-labels: ${{ needs.runners.outputs.labels }}
+#         runner-fleets: ${{ needs.runners.outputs.fleets }}
+#         class: heavy-build
+#         tools: cmake ninja
+#         targets: native
+#
+# Only the tools named in `tools` are installed, and only their directories go on PATH: no mise shims,
+# and nothing from .mise.toml's [env] (AWS_PROFILE and the Terragrunt settings are for people's
+# machines; a shim would set them for every tool it runs).
+
+on:
+  workflow_call:
+    inputs:
+      runner-labels:
+        description: The resolver's labels output (.github/workflows/_runners.yml)
+        type: string
+        required: true
+      runner-fleets:
+        description: The resolver's fleets output
+        type: string
+        required: true
+      class:
+        description: The job's class in ci/runner-policy.yaml
+        type: string
+        required: true
+      os:
+        description: linux, windows or macos
+        type: string
+        default: linux
+      tools:
+        description: The .mise.toml tools to install, by their names there, separated by spaces
+        type: string
+        required: true
+      targets:
+        description: The make targets to run, in order, separated by spaces
+        type: string
+        required: true
+      fetch-depth:
+        description: The commits to fetch; 0 for the whole history (make check's gitleaks hook needs origin/main)
+        type: number
+        default: 1
+      github-token:
+        description: Give make the run's token as GITHUB_TOKEN (tflint fetches its ruleset from GitHub's API)
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: Minutes from when a runner picks the job up (queue time doesn't count)
+        type: number
+        default: 20
+
+permissions: {}
+
+jobs:
+  make:
+    name: make ${{ inputs.targets }}
+    runs-on: ${{ fromJSON(inputs.runner-labels)[inputs.class][inputs.os] }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ inputs.fetch-depth }}
+
+      - name: Install the tools
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+        with:
+          version: 2026.11.10
+          install_args: ${{ inputs.tools }}
+          # Only jobs on GitHub-hosted runners read or write the Actions cache. Until the vendor's
+          # runners are measured (#67), nothing a vendor job writes is restored by another job (ADR 0005).
+          cache: ${{ fromJSON(inputs.runner-fleets)[inputs.class][inputs.os] == 'github' }}
+          env: false
+          add_shims_to_path: false
+
+      - name: Put the tools on PATH
+        run: mise bin-paths >>"$GITHUB_PATH"
+
+      - name: make ${{ inputs.targets }}
+        env:
+          TARGETS: ${{ inputs.targets }}
+          GITHUB_TOKEN: ${{ inputs.github-token && github.token || '' }}
+        run: |
+          read -ra targets <<<"$TARGETS"
+          make "${targets[@]}"

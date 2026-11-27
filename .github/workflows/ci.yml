@@ -1,0 +1,189 @@
+name: ci
+
+# The checks for every pull request (ADR 0043). Lint runs on every change; each other check runs when
+# the change touches a path it covers (ci/checks.yaml). ci-ok sums them up: it's the one check the
+# main ruleset will require. The merge queue, main and manual runs run every check.
+#
+# Each job runs make with the .mise.toml pins (ADR 0044, .github/workflows/_make.yml), on the runner
+# the policy picks for its class (ADR 0005).
+#
+# A pull request runs its own version of this file and of ci/: a change to them is caught in review
+# (CODEOWNERS), not by these checks. Fork pull requests run only after a maintainer approves them (the
+# repository's setting for all external contributors); the heavy-build jobs start Incredibuild
+# runners, so check a fork's .github/, ci/ and Makefile changes before approving.
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # A new push to a pull request cancels its older run. Main, the merge queue and manual runs each get
+  # their own group, so none of them waits for or replaces another.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  runners:
+    # zizmor suggests the self-repository form ($/...), but actionlint 1.7.12 rejects it (#68).
+    uses: ./.github/workflows/_runners.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  changes:
+    name: pick the checks
+    needs: runners
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).light.linux }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      checks: ${{ steps.pick.outputs.checks }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # A pull request's checkout is GitHub's merge of it into its base: the merge commit and its
+          # two parents are enough.
+          fetch-depth: 2
+      - name: Pick the checks
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            # The merge commit's first parent is the base branch, so the diff is what merging changes.
+            git rev-parse --verify --quiet 'HEAD^2' >/dev/null ||
+              { echo "::error::HEAD isn't GitHub's merge commit, so the pull request's changes are unknown"; exit 1; }
+            bash ci/changed-checks.sh 'HEAD^1'
+          else
+            bash ci/changed-checks.sh --all
+          fi
+
+  lint:
+    name: lint
+    needs: runners
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: light
+      targets: check
+      # Every tool a pre-commit hook in .pre-commit-config.yaml runs
+      tools: >-
+        pre-commit python uv node go jq aqua:mikefarah/yq gitleaks actionlint aqua:zizmorcore/zizmor
+        shellcheck hadolint pipx:yamllint terraform terragrunt tflint trivy aqua:terraform-docs/terraform-docs
+      # The gitleaks hook scans the commits since the merge base with origin/main.
+      fetch-depth: 0
+      github-token: true
+
+  infra:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'infra')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: light
+      tools: terraform terragrunt
+      targets: infra
+
+  native:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'native')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: heavy-build
+      tools: cmake ninja
+      targets: native
+      timeout-minutes: 30
+
+  validator:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'validator')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: heavy-build
+      tools: go cmake ninja
+      targets: validator validator-integration
+      timeout-minutes: 30
+
+  game:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'game')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: light
+      tools: node
+      targets: game game-integration
+
+  web:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'web')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: light
+      tools: node
+      targets: web
+
+  bots:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'bots')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      runner-fleets: ${{ needs.runners.outputs.fleets }}
+      class: light
+      tools: node
+      # bots-integration plays against the real game servers, so the game is built first.
+      targets: game bots bots-integration
+
+  ci-ok:
+    name: ci-ok
+    needs: [runners, changes, lint, infra, native, validator, game, web, bots]
+    # always(), not !cancelled(): GitHub counts a skipped required check as passed, so ci-ok must run,
+    # and fail, when the run is cancelled or a job it waits for failed.
+    if: always()
+    # When the resolver failed there's no label, this expression fails, and ci-ok fails with it.
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).light.linux }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out ci/
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci
+      - name: Decide
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          CHECKS: ${{ needs.changes.outputs.checks }}
+        run: bash ci/ci-ok.sh

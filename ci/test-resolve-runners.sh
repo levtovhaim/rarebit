@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for ci/resolve-runners.sh, run by make check (the runner-policy-tests hook) and, on the runner
+# Tests for ci/resolve-runners.sh, run by make check (the ci-tests hook) and, on the runner
 # image itself, by the runner policy workflow.
 #   Part 1: the resolver's rules (precedence, fallbacks, refusals, outputs) on a fixture policy.
 #   Part 2: the workflows: no runs-on label outside the resolver.

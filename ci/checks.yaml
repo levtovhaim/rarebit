@@ -1,0 +1,39 @@
+# Which CI checks a pull request runs (ADR 0043). The changes job in .github/workflows/ci.yml reads
+# this file through ci/changed-checks.sh, and ci-ok (ci/ci-ok.sh) uses it to tell a check that wasn't
+# needed from one that didn't run.
+#
+# Each check names the paths it covers: a path ending in / covers everything under it, any other
+# path covers one file. A pull request runs a check when it adds, changes, deletes or renames a file
+# the check covers. `make check` (lint) runs on every pull request, and the merge queue, main and
+# manual runs run every check.
+#
+# Each check is a job of the same name in ci.yml. ci/test-changed-checks.sh fails when the two
+# disagree, or when a path here doesn't exist.
+
+# A change to any of these runs every check: the CI wiring itself, and what every check runs with
+# (the tool pins, the Makefile).
+all:
+  - .github/workflows/ci.yml
+  - .github/workflows/_make.yml
+  - .github/workflows/_runners.yml
+  - ci/
+  - .mise.toml
+  - Makefile
+
+checks:
+  infra:
+    - infra/
+  native:
+    - native/
+  validator:
+    - apps/validator/
+    - native/ # cgo links native/hebrew-normalize
+    - data/ # the content tests read the word lists
+  game:
+    - apps/game/
+  web:
+    - apps/web/
+  bots:
+    - apps/bots/
+    - apps/game/ # the integration tests run the real game servers
+    - data/categories/ # the scripted bots answer from the word lists
