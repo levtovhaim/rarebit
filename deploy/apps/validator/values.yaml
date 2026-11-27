@@ -1,0 +1,36 @@
+# The validator's HTTP API (apps/validator/README.md → Deploy). Its migrate Job is deploy/apps/validator-migrate.
+# DATABASE_URL is the environment's (deploy/envs/<env>/validator/values.yaml, extraEnv): a
+# secretKeyRef to the database's Secret, never a value (the schema refuses one).
+owner: haimlevtov # catalog/validator.yaml
+tier: "1"
+image:
+  repository: rarebit/validator
+args: [serve]
+replicas: 2
+port: 8080
+env:
+  # Go's heap target below the container's 128Mi limit, so it collects garbage before the kernel kills it
+  - name: GOMEMLIMIT
+    value: 100MiB
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+probes:
+  type: http
+  readiness:
+    path: /readyz        # 503 while draining, before the first migrate, or when Postgres is unreachable
+    timeoutSeconds: 2    # the readiness check itself takes up to 1 s
+    periodSeconds: 5
+    failureThreshold: 3  # the README asks for 3+: one slow Postgres check doesn't take a pod out
+  liveness:
+    path: /healthz       # never checks Postgres: a database outage must not restart every pod
+    timeoutSeconds: 2
+    periodSeconds: 10
+    failureThreshold: 3
+lifecycle:
+  preStopSleepSeconds: 0 # VALIDATOR_DRAIN_DELAY (5 s) already keeps it serving; the README says "not both"
+terminationGracePeriodSeconds: 32 # > 0 preStop + 5 drain + 20 shutdown + 3 = 28, with a 4 s margin

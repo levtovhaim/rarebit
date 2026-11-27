@@ -1,0 +1,51 @@
+{{- $name := include "service.name" . -}}
+{{- if eq .Values.mode "deployment" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  strategy:
+    {{- if eq .Values.rollout.strategy "Recreate" }}
+    type: Recreate
+    {{- else }}
+    type: RollingUpdate
+    rollingUpdate:
+      # New pods are ready before old ones go: the service never drops below its replica count.
+      maxUnavailable: 0
+      maxSurge: {{ .Values.rollout.maxSurge }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "service.podLabels" . | nindent 8 }}
+    spec:
+      {{- include "service.podSpec" . | nindent 6 }}
+{{- else }}
+{{- $podLabels := include "service.podLabels" . }}
+{{- $podSpec := include "service.podSpec" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # A Job's pod template can't change, so every different template (a new image, variable or limit)
+  # gets its own Job, named after it, and runs again. Re-running migrate is safe (ADR 0014).
+  name: {{ printf "%s-%s" $name (print $podLabels $podSpec | sha256sum | trunc 8) }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.job.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- $podLabels | nindent 8 }}
+    spec:
+      {{- $podSpec | nindent 6 }}
+{{- end }}

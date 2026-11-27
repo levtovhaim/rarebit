@@ -15,6 +15,8 @@ repos:
       - id: check-merge-conflict
       - id: check-yaml
         args: [--allow-multiple-documents]
+        # Helm templates are Go templates that render to YAML, not YAML themselves (make deploy checks them)
+        exclude: ^deploy/charts/[^/]+/templates/
       - id: check-toml
       - id: check-json
       - id: check-added-large-files
@@ -87,6 +89,7 @@ repos:
         entry: yamllint
         language: system
         types: [yaml]
+        exclude: ^deploy/charts/[^/]+/templates/
       - id: permission-gate-tests
         name: permission gate tests (.claude/hooks)
         entry: bash .claude/hooks/test-readonly-gate.sh

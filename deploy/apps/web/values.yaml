@@ -1,0 +1,49 @@
+# The web UI, nginx-unprivileged (apps/web/README.md → Settings the deployment must get right).
+owner: haimlevtov # catalog/web.yaml
+tier: "1"
+image:
+  repository: rarebit/web
+replicas: 2
+port: 8080
+metricsPort: 9113
+securityContext:
+  runAsUser: 101
+  runAsGroup: 101
+tmpVolume: true
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+ingress:
+  enabled: true
+  annotations:
+    alb.ingress.kubernetes.io/group.order: "100"
+    # The preStop pause (15 s) covers the time the Service and the ALB take to stop sending new
+    # requests; the deregistration delay then lets requests already in flight finish, within the
+    # grace period. Stickiness keeps a player on one pod during a rollout, so a new page never asks
+    # an old pod for its assets (#44).
+    alb.ingress.kubernetes.io/target-group-attributes: >-
+      deregistration_delay.timeout_seconds=15,stickiness.enabled=true,stickiness.type=lb_cookie,stickiness.lb_cookie.duration_seconds=3600
+  paths:
+    - path: /
+      pathType: Prefix
+
+probes:
+  type: http
+  readiness:
+    path: /readyz        # 200 while nginx accepts connections; it serves files from the image, no dependencies
+    timeoutSeconds: 1    # a static answer: 1 s is plenty
+    periodSeconds: 5
+    failureThreshold: 2
+  liveness:
+    path: /healthz
+    timeoutSeconds: 1
+    periodSeconds: 10
+    failureThreshold: 3
+lifecycle:
+  preStopSleepSeconds: 15 # nginx refuses new connections the moment SIGQUIT arrives, so wait while the
+                          # Service and the ALB drop the pod (deregistration delay above: 15 s)
+terminationGracePeriodSeconds: 30 # > 15 pause + 10 nginx drain = 25, with a 5 s margin

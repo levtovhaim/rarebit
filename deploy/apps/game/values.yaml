@@ -1,0 +1,64 @@
+# The game server (apps/game/README.md → Run it). ALLOWED_ORIGINS is the environment's
+# (deploy/envs/<env>/game/values.yaml, extraEnv): the origin players open the web UI on.
+owner: haimlevtov # catalog/game.yaml
+tier: "1"
+image:
+  repository: rarebit/game
+replicas: 2
+# Both new pods at once: each player is told to reconnect once per rollout, not once per pod.
+rollout:
+  maxSurge: 2
+port: 8080
+env:
+  # Redis's password, from the Secret redis (docs/runbooks/eks.md creates it); REDIS_URL takes it
+  # through $(REDIS_PASSWORD), so it's never written in values.
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: redis
+        key: password
+  - name: REDIS_URL
+    value: redis://:$(REDIS_PASSWORD)@redis:6379
+  - name: VALIDATOR_URL
+    value: http://validator:8080
+  # Behind the ALB: one proxy appends to X-Forwarded-For (apps/game/README.md).
+  - name: TRUSTED_PROXY_HOPS
+    value: "1"
+  # Node's heap below the container's 256Mi limit, so it collects garbage before the kernel kills it
+  - name: NODE_OPTIONS
+    value: --max-old-space-size=192
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+# The ALB routes /socket.io here and everything else to the web UI: the IngressGroup rarebit
+# (CLAUDE.md rule 6) merges both Ingresses into one load balancer, lower group.order first.
+ingress:
+  enabled: true
+  annotations:
+    alb.ingress.kubernetes.io/group.order: "10"
+    # A draining pod tells its players to reconnect after DRAIN_DELAY_SECONDS (15 s) and is gone
+    # within SHUTDOWN_TIMEOUT_SECONDS (10 s) more: keep its connections open until then.
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30
+  paths:
+    - path: /socket.io
+      pathType: Prefix
+
+probes:
+  type: http
+  readiness:
+    path: /readyz        # 503 while draining or when Redis is down: the pod gets no new players
+    timeoutSeconds: 2    # /readyz waits up to 1 s for its Redis write; Kubernetes' default of 1 s would time out first
+    periodSeconds: 5     # checked every 5 s...
+    failureThreshold: 2  # ...so a pod that lost Redis leaves the Service within about 10 s
+  liveness:
+    path: /healthz       # "the process serves HTTP"; it never checks Redis
+    timeoutSeconds: 2
+    periodSeconds: 10
+    failureThreshold: 3  # 30 s of failures before a restart: a slow moment never kills a pod with live games
+lifecycle:
+  preStopSleepSeconds: 0 # no pause: the game keeps serving for DRAIN_DELAY_SECONDS (15 s) by itself
+terminationGracePeriodSeconds: 30 # > 15 drain + 1 notice + 10 shutdown = 26, with a 4 s margin

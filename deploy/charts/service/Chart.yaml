@@ -1,0 +1,5 @@
+apiVersion: v2
+name: service
+description: The one chart every Rarebit service and job deploys with (ADR 0045)
+type: application
+version: 0.1.0
