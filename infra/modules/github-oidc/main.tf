@@ -100,7 +100,7 @@ locals {
     # otherwise give away.
     tf_plan = jsonencode({
       Version = "2012-10-17"
-      Statement = [
+      Statement = concat([
         {
           Sid      = "NoSecretValues"
           Effect   = "Deny"
@@ -177,7 +177,15 @@ locals {
           Resource  = "*"
           Condition = { StringNotEquals = { "s3:ResourceAccount" = var.account_id } }
         },
-      ]
+        ],
+        # State that holds personal data (the alert address): pull request plans can't read it, and
+        # don't plan those units (ADR 0041).
+        length(var.private_state_prefixes) == 0 ? [] : [{
+          Sid      = "NoPrivateState"
+          Effect   = "Deny"
+          Action   = "s3:GetObject*"
+          Resource = [for p in var.private_state_prefixes : "arn:aws:s3:::${var.state_bucket}/${p}/*"]
+      }])
     })
   }
 

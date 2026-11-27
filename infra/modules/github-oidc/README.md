@@ -16,7 +16,7 @@ The job trades the token for a role's credentials (`aws-actions/configure-aws-cr
 |---|---|---|
 | `pr` | pull request runs | push, read and delete images in the PR repositories (`rarebit/pr/*`) |
 | `main` | runs on the `main` branch | push and read images in the main repositories; no delete |
-| `tf_plan` | pull request runs | read configuration (`ReadOnlyAccess`) and write nothing; denied secret and parameter values, the account's contact, billing and cost data, data-plane reads (logs, messages, table items, objects outside the state bucket) and other accounts' buckets |
+| `tf_plan` | pull request runs | read configuration (`ReadOnlyAccess`) and write nothing; denied secret and parameter values, the account's contact, billing and cost data, data-plane reads (logs, messages, table items, objects outside the state bucket), the state of units listed in `private_state_prefixes`, and other accounts' buckets |
 
 - **No inline policy** of a CI role may change IAM, repository policies, lifecycle rules, tag mutability, scanning or replication, or allow a `*` action. `ReadOnlyAccess` is AWS's managed policy of `Get*`, `List*` and `Describe*` actions.
 - **Whoever opens a pull request** controls the code that runs with `pr` and `tf_plan`, and can take either: the denies on `tf_plan` are what limit it (ADR 0038).
@@ -85,6 +85,7 @@ inputs = {
 | region | The region of the ECR repositories. | `string` | n/a | yes |
 | roles | The role names: pr (pull request image builds), main (main image builds), tf\_plan (pull request terraform plans). | `map(string)` | n/a | yes |
 | state\_bucket | The Terraform state bucket: the only bucket whose objects the tf\_plan role may read (each unit's state). | `string` | n/a | yes |
+| private\_state\_prefixes | Unit paths (state keys under the bucket, e.g. \_global/cost-alerts) whose state holds personal data: the tf\_plan role may not read them. | `list(string)` | `[]` | no |
 | role\_path | The IAM path for the roles, e.g. /ci/; repository policies match the roles by their ARN, which includes it. | `string` | `"/ci/"` | no |
 
 ## Outputs

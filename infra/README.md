@@ -1,10 +1,13 @@
 # infra
 
-The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0040).
+The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0041).
 
 ```
 infra/
 ├── modules/                 plain Terraform, one directory per module
+│   ├── cost-alerts/         the cost budgets and the anomaly monitor
+│   │   ├── examples/basic/  the module with plain terraform (plan only)
+│   │   └── tests/           terraform test, AWS mocked
 │   ├── state-bootstrap/     the S3 bucket for Terraform state
 │   │   ├── examples/basic/  the module with plain terraform (plan only)
 │   │   └── tests/           terraform test, AWS mocked
@@ -18,8 +21,9 @@ infra/
     ├── root.hcl             provider, backend, version constraints: shared by every unit
     └── _global/             the account's foundation, shared by every environment
         ├── env.hcl
-        ├── shared.hcl       repository and CI role names, read by the ecr and github-oidc units (ADR 0039)
+        ├── shared.hcl       names more than one unit needs: repositories, CI roles, private state units (ADR 0039)
         ├── bootstrap/       unit: the state bucket
+        ├── cost-alerts/     unit: the budgets and the anomaly monitor, planned locally only ([runbook](../docs/runbooks/cost-alerts.md))
         ├── ecr/             unit: the image registries ([runbook](../docs/runbooks/ecr.md))
         └── github-oidc/     unit: the CI roles ([runbook](../docs/runbooks/github-oidc.md))
 ```
@@ -40,6 +44,8 @@ Run these in WSL, inside the repo, where mise is active.
    ```
 
    Take it from `aws sts get-caller-identity --profile rarebit --query Account --output text`, after the check in step 2. Every unit's provider and backend refuse to run in any other account, and nothing runs while the variable is unset, empty or not 12 digits.
+
+   For `_global/cost-alerts`, add `RAREBIT_ALERT_EMAIL = "<address>"` to the same `[env]`: where the budget and anomaly alerts go (ADR 0041). Only that unit needs it.
 
 Terragrunt keeps its working copies in `~/.cache/terragrunt` (`TG_DOWNLOAD_DIR` in `.mise.toml`), not in the checkout. On a Windows drive mounted into WSL, Terragrunt can't replace its own generated files (ADR 0033), so run Terragrunt only where mise is active. With `TG_PROVIDER_CACHE=1` (also in `.mise.toml`), Terragrunt keeps one copy of each provider for all units instead of one per working copy.
 

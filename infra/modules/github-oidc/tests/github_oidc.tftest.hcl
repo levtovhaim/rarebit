@@ -193,6 +193,31 @@ run "the_plan_role_reads_configuration_and_writes_nothing" {
   }
 }
 
+run "the_plan_role_cant_read_private_state" {
+  command = plan
+
+  variables {
+    private_state_prefixes = ["_global/cost-alerts"]
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Action == "s3:GetObject*" && try(s.Resource, []) == ["arn:aws:s3:::test-tfstate/_global/cost-alerts/*"]
+    ])
+    error_message = "The tf_plan role can't read the state of a unit whose state holds personal data."
+  }
+}
+
+run "no_private_state_statement_without_private_units" {
+  command = plan
+
+  assert {
+    condition     = !anytrue([for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement : try(s.Sid, "") == "NoPrivateState"])
+    error_message = "With no private units, the policy has no empty NoPrivateState statement (AWS refuses one without a resource)."
+  }
+}
+
 run "each_role_has_exactly_its_policies" {
   command = plan
 
