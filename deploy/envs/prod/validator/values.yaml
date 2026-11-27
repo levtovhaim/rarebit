@@ -1,0 +1,8 @@
+# prod's database: the CloudNativePG cluster rarebit-pg (deploy/platform/postgres/cluster.yaml). Its
+# operator writes the connection URL, password included, into the Secret rarebit-pg-app.
+extraEnv:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: rarebit-pg-app
+        key: uri

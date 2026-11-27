@@ -1,0 +1,35 @@
+# The validator's Postgres: one CloudNativePG instance on an EBS volume (catalog/postgres.yaml). The
+# operator creates the Secret rarebit-pg-app, whose `uri` key is the validator's DATABASE_URL
+# (deploy/envs/prod/validator). Nothing is backed up yet: the word lists are in git and the migrate Job
+# loads them again, and the answer history starts empty in each environment until backups exist (#72).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: rarebit-pg
+  namespace: rarebit
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: rarebit
+    owner: haimlevtov # catalog/postgres.yaml
+    tier: "1"
+spec:
+  instances: 1
+  # CloudNativePG's minimal image, the newest 18.7 build at least 7 days old on 2026-11-27, by digest
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.7-202611160820-minimal-trixie@sha256:452a15584e2aa1ce658c4ae8538b5dc157eb031d41b82fd19882e0c03bcec01d
+  inheritedMetadata:
+    labels:
+      app.kubernetes.io/part-of: rarebit
+      owner: haimlevtov
+      tier: "1"
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+  storage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

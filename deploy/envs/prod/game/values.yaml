@@ -1,0 +1,9 @@
+# The origin players open the web UI on: the ALB's hostname, known only once the ALB exists and new
+# each time the environment is created, so it comes from the ConfigMap game-origin
+# (docs/runbooks/eks.md), not from git.
+extraEnv:
+  - name: ALLOWED_ORIGINS
+    valueFrom:
+      configMapKeyRef:
+        name: game-origin
+        key: origins

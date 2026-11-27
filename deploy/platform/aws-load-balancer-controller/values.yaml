@@ -1,0 +1,25 @@
+# The AWS Load Balancer Controller (chart eks/aws-load-balancer-controller 3.6.3, app v3.6.3, released
+# 2026-11-13), installed into kube-system by hand for now (docs/runbooks/eks.md, ADR 0048). It turns the
+# game's and the web UI's Ingresses into the one ALB of IngressGroup rarebit. Its IAM role comes
+# through Pod Identity (infra/modules/eks): the association names this service account.
+# vpcId is set at install time from the network unit's output.
+clusterName: rarebit-prod
+region: eu-central-1
+
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+
+# Two replicas: its webhook adds the readiness gates to new pods in the app namespace, and while no
+# replica answers, those pods can't be created.
+replicaCount: 2
+
+# Only Ingresses: a Service of type LoadBalancer isn't ours to turn into an NLB.
+enableServiceMutatorWebhook: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
