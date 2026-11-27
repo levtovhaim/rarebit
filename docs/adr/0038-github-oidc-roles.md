@@ -1,6 +1,6 @@
 # 0038. GitHub Actions reaches AWS through OIDC, with one role per kind of job, trusted by exact claims
 
-- **Status:** accepted
+- **Status:** accepted; the plan role's reading of every unit's state superseded by ADR 0042 (private state units, and no CloudTrail event history)
 - **Date:** 2026-11-26
 - **Deciders:** platform owner
 

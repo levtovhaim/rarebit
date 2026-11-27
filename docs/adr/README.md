@@ -41,6 +41,8 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0035](0035-account-id-out-of-git.md) | Keep the AWS account ID out of git: an environment variable locally, a masked secret in CI | accepted |
 | [0036](0036-ecr-repository-per-service.md) | Private ECR repositories per service, separate for main and PR images, with immutable tags and lifecycle rules | accepted; who may push to and delete from the main repositories superseded by 0040 |
 | [0037](0037-no-terragrunt-destroy-in-global.md) | Terragrunt's destroy command never runs in the account's foundation units | accepted |
-| [0038](0038-github-oidc-roles.md) | GitHub Actions reaches AWS through OIDC, with one role per kind of job, trusted by exact claims | accepted |
+| [0038](0038-github-oidc-roles.md) | GitHub Actions reaches AWS through OIDC, with one role per kind of job, trusted by exact claims | accepted; the plan role's reading of every unit's state superseded by 0042 |
 | [0039](0039-shared-names-for-global-units.md) | Names that several `_global` units need are written once, in `_global/shared.hcl` | accepted |
 | [0040](0040-ecr-repository-policies.md) | ECR repositories enforce who may push and delete with deny-only repository policies, and people keep both as break-glass | accepted |
+| [0041](0041-cost-alerts-imported.md) | The cost budgets and anomaly monitor are Terraform, imported from the console, not recreated | accepted |
+| [0042](0042-private-state-units.md) | A unit whose state holds personal data is private: its value comes from the environment, and pull request plans can't read it | accepted |

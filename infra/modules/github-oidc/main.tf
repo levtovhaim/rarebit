@@ -100,7 +100,7 @@ locals {
     # otherwise give away.
     tf_plan = jsonencode({
       Version = "2012-10-17"
-      Statement = [
+      Statement = concat([
         {
           Sid      = "NoSecretValues"
           Effect   = "Deny"
@@ -115,8 +115,8 @@ locals {
           Resource = "arn:aws:ssm:*:${var.account_id}:parameter/*"
         },
         {
-          # The account owner's contact, payment and tax details, budget subscribers' addresses,
-          # and Cost Explorer, which bills every request.
+          # The account owner's contact, payment and tax details, the budgets' and anomaly alerts'
+          # subscribers, and Cost Explorer, which bills every request.
           Sid    = "NoAccountOrBillingData"
           Effect = "Deny"
           Action = [
@@ -137,9 +137,13 @@ locals {
         {
           # Data, not configuration: a plan never needs it. Some of these bill per request
           # (GetMetricData, StartQuery) or change state (ReceiveMessage hides a message from its consumer).
+          # CloudTrail's event history holds the parameters of every management call, an alert
+          # subscription's address among them, and the callers' source addresses (ADR 0042).
           Sid    = "NoDataReads"
           Effect = "Deny"
           Action = [
+            "cloudtrail:GetQueryResults",
+            "cloudtrail:LookupEvents",
             "cloudwatch:GetMetricData",
             "cloudwatch:GetMetricWidgetImage",
             "dynamodb:BatchGetItem",
@@ -177,7 +181,19 @@ locals {
           Resource  = "*"
           Condition = { StringNotEquals = { "s3:ResourceAccount" = var.account_id } }
         },
-      ]
+        ],
+        # State that holds personal data (the alert address): pull request plans can't read it, in the
+        # default workspace or any other (env:/<workspace>/<key>), and the plan workflow must skip
+        # those units (ADR 0042, #62).
+        length(var.private_state_prefixes) == 0 ? [] : [{
+          Sid    = "NoPrivateState"
+          Effect = "Deny"
+          Action = "s3:GetObject*"
+          Resource = flatten([for p in var.private_state_prefixes : [
+            "arn:aws:s3:::${var.state_bucket}/${p}/*",
+            "arn:aws:s3:::${var.state_bucket}/env:/*/${p}/*",
+          ]])
+      }])
     })
   }
 

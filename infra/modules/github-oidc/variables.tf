@@ -94,8 +94,19 @@ variable "pr_repositories" {
   }
 }
 
+variable "private_state_prefixes" {
+  description = "Unit paths (state keys under the bucket, e.g. _global/cost-alerts) whose state holds personal data: the tf_plan role may not read them."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for p in var.private_state_prefixes : can(regex("^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$", p))])
+    error_message = "A unit path, no leading or trailing slash and no wildcard, e.g. _global/cost-alerts."
+  }
+}
+
 variable "state_bucket" {
-  description = "The Terraform state bucket: the only bucket whose objects the tf_plan role may read (each unit's state)."
+  description = "The Terraform state bucket: the only bucket whose objects the tf_plan role may read (each unit's state, except those in private_state_prefixes)."
   type        = string
 
   validation {
