@@ -44,3 +44,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0038](0038-github-oidc-roles.md) | GitHub Actions reaches AWS through OIDC, with one role per kind of job, trusted by exact claims | accepted |
 | [0039](0039-shared-names-for-global-units.md) | Names that several `_global` units need are written once, in `_global/shared.hcl` | accepted |
 | [0040](0040-ecr-repository-policies.md) | ECR repositories enforce who may push and delete with deny-only repository policies, and people keep both as break-glass | accepted |
+| [0041](0041-cost-alerts-imported-and-kept-private.md) | The cost alerts are code, imported from the console, with the alert address kept out of git and out of pull request plans | accepted |
