@@ -81,7 +81,6 @@ resource "aws_ce_anomaly_subscription" "account" {
     }
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # No prevent_destroy: a subscription holds no history (the anomalies belong to the monitor), so
+  # replacing it loses nothing. AWS can't rename one in place: a new name replaces it.
 }

@@ -8,7 +8,7 @@ Every budget:
 - **emails `alert_email`** at each notification's percentage of its limit, `ACTUAL` (spent so far) or `FORECASTED` (AWS's projection for the period);
 - has **`prevent_destroy`**: a budget's history lives only in AWS, and a replaced one starts from nothing (ADR 0037).
 
-The anomaly subscription emails once a day about anomalies worth it: the threshold is in `main.tf`, and the tests say what it is.
+The anomaly monitor has `prevent_destroy` too: its model of expected spend is built from history. The subscription that emails about it doesn't: it holds no history, and AWS replaces a subscription to rename it. It emails once a day about anomalies worth it: the threshold is in `main.tf`, and the tests say what it is.
 
 **`alert_email` is personal data.** It's marked sensitive, so plans print `(sensitive value)`, but state holds it in plain text: whoever can read the unit's state can read the address. The live unit takes it from the environment and its state is closed to pull request plans (ADR 0041).
 

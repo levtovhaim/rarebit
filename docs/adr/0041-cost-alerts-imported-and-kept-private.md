@@ -15,10 +15,10 @@
 
 ## Decision
 
-- **A module, `infra/modules/cost-alerts`, and a unit, `infra/live/_global/cost-alerts`,** hold the budgets and the monitor. Every budget leaves out credits and refunds, in `UnblendedCost`; the module's tests check it. `prevent_destroy` on all of them (ADR 0037).
+- **A module, `infra/modules/cost-alerts`, and a unit, `infra/live/_global/cost-alerts`,** hold the budgets and the monitor. Every budget leaves out credits and refunds, in `UnblendedCost`; the module's tests check it. `prevent_destroy` on the budgets and the monitor, which hold history (ADR 0037), not on the subscription, which doesn't.
 - **Import, don't recreate.** The unit's `import` blocks take over the console-made budgets, monitor and subscription, so their history and alert state stay. The blocks are generated at run time (their IDs contain the account ID, ADR 0035), and removed after the first apply. The import changes only what we chose:
   - default tags on all five;
-  - the subscription's name, which was a person's IAM user name;
+  - the subscription's name, which was a person's IAM user name. AWS can't rename a subscription, so the import replaces it: the plan's one destroy. Nothing is lost, since the anomalies belong to the monitor;
   - the anomaly threshold: at least 50% above expected **or** at least $5 in total, the design from 2026-11-23 that the console subscription lacked.
 - **The alert address comes from the environment,** `RAREBIT_ALERT_EMAIL` in `.mise.local.toml` (git ignores it), as the account ID does. The module marks it sensitive, so plans print `(sensitive value)`.
 - **Pull request plans can't read this unit's state.** `shared.hcl` lists `_global/cost-alerts` as a private state unit, and `gha-tf-plan` is denied `s3:GetObject*` on it. The role is already denied `budgets:*` and `ce:*` (ADR 0038), so it couldn't plan this unit anyway: it's planned locally, and later by the apply workflow (#62).
@@ -52,6 +52,6 @@
 
 ## How we'll know it was right
 
-- After the import, a plan of the unit shows `No changes`, and the budgets in AWS show their spend from before the import.
+- The first apply imports five, replaces the subscription and changes only tags and the threshold. After it, a plan of the unit shows `No changes`, and the budgets in AWS show their spend from before the import.
 - IAM's policy simulator shows `gha-tf-plan` denied `s3:GetObject` on `_global/cost-alerts/terraform.tfstate` and allowed on other units' state.
 - An alert email arrives when a budget or the anomaly threshold is crossed.
