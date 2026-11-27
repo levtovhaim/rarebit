@@ -65,4 +65,5 @@ jobs:
         env:
           RUNNER_FLEET: ${{ vars.RUNNER_FLEET }}
           RUNNER_LABEL: ${{ vars.RUNNER_LABEL }}
-        run: bash ci/resolve-runners.sh >/dev/null
+        # stdout stays in the log: the labels, and the ::warning commands GitHub reads from it.
+        run: bash ci/resolve-runners.sh
