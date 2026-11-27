@@ -1,6 +1,6 @@
 # CI runner evaluation
 
-Compares GitHub-hosted runners with Incredibuild runners for the job classes this repo will run. This first round is a **spike**: it records what each fleet offers and how it behaves on small, reproducible workloads, before any real CI exists. Later rounds use the real build: `runner-edge.yml`, built together with the runner policy (`ci/runner-policy.yaml`), and after it burst, cache and compile benchmarks.
+Compares GitHub-hosted runners with Incredibuild runners for the job classes this repo will run. This first round is a **spike**: it records what each fleet offers and how it behaves on small, reproducible workloads, before any real CI exists. Later rounds use the real build: `runner-edge.yml` (next, now that the runner policy `ci/runner-policy.yaml` exists; #67), and after it burst, cache and compile benchmarks.
 
 ## Setup
 
@@ -70,6 +70,8 @@ All three Incredibuild labels were served, Arm and Windows included. Both Linux 
 | `windows-2022` | 2 s | 2 s |
 | `incredibuild-windows-2022` | 3 min 39 s | 2 min 21 s |
 
+Later samples, from the runner policy's proof workflow (one no-op job each, so not yet a measurement): `incredibuild-ubuntu-2404` queued **41 s** (run 45956498946, 2026-11-27 07:09Z) and **11 s** (run 45958010438, 07:22Z). That's far below the spike's start-up; `runner-edge.yml` re-measures it with medians (#67).
+
 ### Linux x64 measurements (seconds unless noted)
 
 | Metric | GitHub, cold | GitHub, warm | Incredibuild, cold | Incredibuild, warm |
@@ -99,7 +101,7 @@ Egress, from the cold run:
 5. **The Windows runner has half the RAM** of the GitHub-hosted one (8 vs 16 GB). Memory-hungry builds (MSVC with many parallel jobs) need checking before routing them there.
 6. **Network:** lower download throughput and higher latency to github.com on Incredibuild.
 
-**Input for the runner policy (a proposal; [ADR 0005](../adr/0005-ci-runner-fleets-by-job-class.md) is decided when the policy is built):**
+**Input for the runner policy** (decided on 2026-11-27 in [ADR 0005](../adr/0005-ci-runner-fleets-by-job-class.md) and [`ci/runner-policy.yaml`](../../ci/runner-policy.yaml): `heavy-build` on Linux to Incredibuild, everything else to GitHub-hosted; the proposal was):
 - long C/C++ and other heavy compiles (`heavy-build`) → Incredibuild
 - `light`, `tf-plan` and short `e2e` jobs → GitHub-hosted
 - `docker` → decided after measuring real images

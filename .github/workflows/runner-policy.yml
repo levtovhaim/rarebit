@@ -1,0 +1,127 @@
+name: runner policy
+
+# Proves that ci/runner-policy.yaml routes jobs where it says (ADR 0005): it resolves the labels, runs a
+# no-op job for every class and OS on its resolved runner, and checks on GitHub's side which runner
+# group took each job. Run it after changing the policy, RUNNER_FLEET or RUNNER_LABEL
+# (docs/runbooks/ci-runner-fallback.md): Actions → runner policy → Run workflow. The weekly run is the
+# canary for a fleet that stopped taking jobs, until the queue-time check exists (#67).
+#
+# Fork pull requests run only after a maintainer approves them (the repository's setting for all
+# external contributors); this workflow can start Incredibuild runners, so check a fork's
+# .github/workflows/ and ci/ changes before approving.
+
+on:
+  pull_request:
+    paths:
+      - ci/runner-policy.yaml
+      - ci/resolve-runners.sh
+      - ci/test-resolve-runners.sh
+      - .github/workflows/_runners.yml
+      - .github/workflows/runner-policy.yml
+      - .github/actionlint.yaml
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: runner-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runners:
+    # zizmor suggests the self-repository form ($/...), but actionlint 1.7.12, the newest release, rejects it
+    # as a reusable workflow call; switch when actionlint supports it (#68).
+    uses: ./.github/workflows/_runners.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  # The resolver's tests on the runner image itself: CI runs the image's yq and jq, while make check
+  # runs the .mise.toml pins, so this is where an image update would show.
+  test:
+    name: resolver tests on the runner image
+    needs: runners
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).light.linux }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the policy and the workflows
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci
+            .github
+      - name: Run the tests
+        run: bash ci/test-resolve-runners.sh
+
+  probe:
+    name: ${{ matrix.class }} on ${{ matrix.os }}
+    needs: runners
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels)[matrix.class][matrix.os] }}
+    # Counts from when a runner picks the job up, not from the queue: a job on a label nobody serves
+    # waits up to a day. The verify job is what notices that.
+    timeout-minutes: 3
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.runners.outputs.pairs) }}
+    steps:
+      - name: Report the runner
+        shell: bash
+        env:
+          LABEL: ${{ fromJSON(needs.runners.outputs.labels)[matrix.class][matrix.os] }}
+        run: |
+          echo "label=$LABEL runner=$RUNNER_NAME environment=$RUNNER_ENVIRONMENT os=$RUNNER_OS arch=$RUNNER_ARCH"
+          echo "| $LABEL | $RUNNER_NAME | $RUNNER_ENVIRONMENT | $RUNNER_OS $RUNNER_ARCH |" >>"$GITHUB_STEP_SUMMARY"
+
+  # Waits for the probes and checks each one's runner group in the jobs API. The group is set on
+  # GitHub's side, so unlike a runner's own name, a runner can't claim another fleet's. A probe still
+  # queued after 10 minutes fails this job: its fleet isn't taking jobs (the fallback runbook).
+  verify:
+    name: verify where the probes ran
+    needs: runners
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).light.linux }}
+    timeout-minutes: 30
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for the probes, then check their runner groups
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAIRS: ${{ needs.runners.outputs.pairs }}
+          # Not GROUPS: bash keeps that name for the user's group IDs and ignores assignments to it.
+          EXPECTED_GROUPS: ${{ needs.runners.outputs.groups }}
+        run: |
+          api="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100"
+          want="$(jq length <<<"$PAIRS")"
+          while :; do
+            probes="$(gh api "$api" | jq -c --argjson pairs "$PAIRS" \
+              '[.jobs[] | select(.name as $n | any($pairs[]; "\(.class) on \(.os)" == $n))]')"
+            stuck="$(jq -r --argjson now "$(date +%s)" \
+              '.[] | select(.status == "queued" and ($now - (.created_at | fromdateiso8601)) > 600) | .name' <<<"$probes")"
+            if [ -n "$stuck" ]; then
+              echo "::error::still queued after 10 minutes, so their fleet isn't taking jobs: $(paste -sd, - <<<"$stuck") (docs/runbooks/ci-runner-fallback.md)"
+              exit 1
+            fi
+            if [ "$(jq length <<<"$probes")" -eq "$want" ] && jq -e 'all(.[]; .status == "completed")' <<<"$probes" >/dev/null; then
+              break
+            fi
+            sleep 15
+          done
+          echo "| probe | result | runner group | expected | runner |" >>"$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >>"$GITHUB_STEP_SUMMARY"
+          fail=0
+          while IFS=$'\t' read -r name conclusion group expected runner; do
+            echo "| $name | $conclusion | $group | $expected | $runner |" >>"$GITHUB_STEP_SUMMARY"
+            if [ "$conclusion" != success ] || [ "$group" != "$expected" ]; then
+              echo "::error::$name: $conclusion in runner group '$group', expected '$expected'"
+              fail=1
+            fi
+          done < <(jq -r --argjson groups "$EXPECTED_GROUPS" '
+            .[] | (.name | split(" on ")) as [$class, $os]
+            | [.name, .conclusion, .runner_group_name, $groups[$class][$os], .runner_name] | @tsv' <<<"$probes")
+          exit "$fail"
