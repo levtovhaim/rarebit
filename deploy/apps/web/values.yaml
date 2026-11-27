@@ -1,0 +1,46 @@
+# The web UI, nginx-unprivileged (apps/web/README.md → Settings the deployment must get right).
+owner: haimlevtov # catalog/web.yaml
+tier: "1"
+image:
+  repository: rarebit/web
+replicas: 2
+port: 8080
+metricsPort: 9113
+securityContext:
+  runAsUser: 101
+  runAsGroup: 101
+tmpVolume: true
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+ingress:
+  enabled: true
+  annotations:
+    alb.ingress.kubernetes.io/group.name: rarebit
+    alb.ingress.kubernetes.io/group.order: "100"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
+    # Deregistration ends before the preStop pause does (apps/web/README.md). Stickiness keeps a
+    # player on one pod during a rollout, so a new page never asks an old pod for its assets (#44).
+    alb.ingress.kubernetes.io/target-group-attributes: >-
+      deregistration_delay.timeout_seconds=15,stickiness.enabled=true,stickiness.type=lb_cookie,stickiness.lb_cookie.duration_seconds=3600
+  paths:
+    - path: /
+      pathType: Prefix
+
+# TODO(human): probes, the preStop pause and the grace period for the web UI.
+#   apps/web/README.md → Settings the deployment must get right has the constraints;
+#   deploy/test/render.sh checks them. Its stop signal is the image's SIGQUIT, nginx's graceful stop.
+#   probes:
+#     type: http
+#     readiness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
+#     liveness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
+#   lifecycle:
+#     preStopSleepSeconds: ...
+#   terminationGracePeriodSeconds: ...

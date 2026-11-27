@@ -1,0 +1,51 @@
+# The game server (apps/game/README.md → Run it). ALLOWED_ORIGINS is the environment's
+# (deploy/envs/<env>/game/values.yaml, extraEnv): the origin players open the web UI on.
+owner: haimlevtov # catalog/game.yaml
+tier: "1"
+image:
+  repository: rarebit/game
+replicas: 2
+port: 8080
+env:
+  - name: REDIS_URL
+    value: redis://redis:6379
+  - name: VALIDATOR_URL
+    value: http://validator:8080
+  # Behind the ALB: one proxy appends to X-Forwarded-For (apps/game/README.md).
+  - name: TRUSTED_PROXY_HOPS
+    value: "1"
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+# The ALB routes /socket.io here and everything else to the web UI: the IngressGroup rarebit
+# (CLAUDE.md rule 6) merges both Ingresses into one load balancer, lower group.order first.
+ingress:
+  enabled: true
+  annotations:
+    alb.ingress.kubernetes.io/group.name: rarebit
+    alb.ingress.kubernetes.io/group.order: "10"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
+    # A draining pod tells its players to reconnect after DRAIN_DELAY_SECONDS (15 s) and is gone
+    # within SHUTDOWN_TIMEOUT_SECONDS (10 s) more: keep its connections open until then.
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30
+  paths:
+    - path: /socket.io
+      pathType: Prefix
+
+# TODO(human): probes, the preStop pause and the grace period for the game server.
+#   apps/game/README.md (Shutdown, and the image's notes) has the constraints; deploy/test/render.sh
+#   checks them.
+#   probes:
+#     type: http
+#     readiness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
+#     liveness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
+#   lifecycle:
+#     preStopSleepSeconds: ...
+#   terminationGracePeriodSeconds: ...

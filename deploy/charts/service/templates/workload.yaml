@@ -1,0 +1,44 @@
+{{- $name := include "service.name" . -}}
+{{- if eq .Values.mode "deployment" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # A new pod is ready before an old one goes: the service never drops below its replica count.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        {{- include "service.labels" . | nindent 8 }}
+    spec:
+      {{- include "service.podSpec" . | nindent 6 }}
+{{- else }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # A Job's pod template can't change, so each image gets its own Job: a new tag runs it again.
+  name: {{ printf "%s-%s" $name (.Values.image.tag | sha256sum | trunc 8) }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.job.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "service.labels" . | nindent 8 }}
+    spec:
+      {{- include "service.podSpec" . | nindent 6 }}
+{{- end }}

@@ -201,6 +201,7 @@ validator data/categories/x.json the content tests read the word lists
 web apps/game/README.md a web test checks the UI text for every error code listed there
 bots apps/game/src/x.ts the integration tests run the real game servers
 bots data/categories/x.json the scripted bots answer from the word lists
+deploy catalog/game.yaml the chart's owner and tier labels come from the catalog
 EOF
 
 # Every workflow ci.yml runs, directly or through another one, is wiring: a change to it runs every

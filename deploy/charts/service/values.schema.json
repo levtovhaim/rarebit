@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "deploy/charts/service values (ADR 0045)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "image", "owner", "tier", "resources", "securityContext"],
+  "definitions": {
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeoutSeconds", "periodSeconds", "failureThreshold"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/[A-Za-z0-9/_.-]*$" },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "periodSeconds": { "type": "integer", "minimum": 1, "maximum": 300 },
+        "failureThreshold": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "initialDelaySeconds": { "type": "integer", "minimum": 0, "maximum": 300 }
+      }
+    },
+    "quantity": { "type": ["string", "number"], "pattern": "^[0-9]+(\\.[0-9]+)?(m|Ki|Mi|Gi)?$" },
+    "envVar": {
+      "type": "object",
+      "required": ["name"],
+      "properties": { "name": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" } }
+    }
+  },
+  "properties": {
+    "nameOverride": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?)?$" },
+    "mode": { "enum": ["deployment", "job"] },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry", "repository", "tag"],
+      "properties": {
+        "registry": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$" },
+        "repository": { "type": "string", "pattern": "^[a-z0-9]+([._/-][a-z0-9]+)*$" },
+        "tag": {
+          "description": "<tag>@sha256:<digest>: never a tag alone, never latest",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}@sha256:[0-9a-f]{64}$",
+          "not": { "pattern": "^latest@" }
+        }
+      }
+    },
+    "owner": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
+    "tier": { "enum": ["1", "2", "3"] },
+    "replicas": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "args": { "type": "array", "items": { "type": "string" } },
+    "env": { "type": "array", "items": { "$ref": "#/definitions/envVar" } },
+    "extraEnv": { "type": "array", "items": { "$ref": "#/definitions/envVar" } },
+    "portName": { "type": "string", "pattern": "^[a-z]([a-z0-9-]{0,13}[a-z0-9])?$" },
+    "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+    "metricsPort": { "type": ["integer", "null"], "minimum": 1024, "maximum": 65535 },
+    "probes": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["type", "readiness", "liveness"],
+      "properties": {
+        "type": { "enum": ["http", "tcp"] },
+        "readiness": { "$ref": "#/definitions/probe" },
+        "liveness": { "$ref": "#/definitions/probe" }
+      },
+      "if": { "properties": { "type": { "const": "http" } } },
+      "then": {
+        "properties": {
+          "readiness": { "required": ["path"] },
+          "liveness": { "required": ["path"] }
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "preStopSleepSeconds": { "type": "integer", "minimum": 0, "maximum": 120 } }
+    },
+    "terminationGracePeriodSeconds": { "type": ["integer", "null"], "minimum": 1, "maximum": 600 },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "memory"],
+          "properties": { "cpu": { "$ref": "#/definitions/quantity" }, "memory": { "$ref": "#/definitions/quantity" } }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["memory"],
+          "properties": { "memory": { "$ref": "#/definitions/quantity" } }
+        }
+      }
+    },
+    "securityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runAsUser", "runAsGroup"],
+      "properties": {
+        "runAsUser": { "type": "integer", "minimum": 1 },
+        "runAsGroup": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "tmpVolume": { "type": "boolean" },
+    "volumes": { "type": "array", "items": { "type": "object", "required": ["name"] } },
+    "volumeMounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "mountPath", "readOnly"],
+        "properties": { "readOnly": { "type": "boolean" } }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "const": "alb" },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "pathType"],
+            "properties": {
+              "path": { "type": "string", "pattern": "^/" },
+              "pathType": { "enum": ["Prefix", "Exact"] }
+            }
+          }
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backoffLimit": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 30, "maximum": 3600 }
+      }
+    }
+  },
+  "if": { "properties": { "mode": { "const": "deployment" } } },
+  "then": {
+    "required": ["probes", "terminationGracePeriodSeconds"],
+    "properties": {
+      "probes": { "type": "object" },
+      "terminationGracePeriodSeconds": { "type": "integer" }
+    }
+  }
+}

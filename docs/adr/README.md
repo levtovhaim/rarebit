@@ -48,3 +48,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0042](0042-private-state-units.md) | A unit whose state holds personal data is private: its value comes from the environment, and pull request plans can't read it | accepted |
 | [0043](0043-pull-request-checks-by-path-with-ci-ok.md) | Pull requests run lint and the checks their changes need, summed up in one check, ci-ok | accepted |
 | [0044](0044-ci-tools-from-mise-without-its-env.md) | CI installs the tools pinned in .mise.toml with a hash-checked mise, puts them on PATH without mise's [env], and restores no cache | accepted |
+| [0045](0045-one-helm-chart-for-every-service.md) | Every service deploys with one Helm chart, its values layered by service, environment and image tag | accepted |

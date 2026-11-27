@@ -1,0 +1,51 @@
+# Redis for the game's rooms, timers and fan-out (ADR 0019), the same image the local stack uses.
+# One replica, nothing saved to disk: a restart loses the rooms in play, and players start new ones.
+# Failover, persistence and a memory cap per key prefix are #30, #31 and #52.
+owner: haimlevtov # catalog/redis.yaml
+tier: "1"
+image:
+  registry: docker.io
+  repository: library/redis
+  tag: 8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+replicas: 1
+args:
+  - redis-server
+  - --save
+  - ""
+  - --appendonly
+  - "no"
+  # Below the container's memory limit, and refuse writes when full rather than evict a game's keys
+  - --maxmemory
+  - 192mb
+  - --maxmemory-policy
+  - noeviction
+portName: redis
+port: 6379
+securityContext:
+  runAsUser: 999 # the image's redis user (id redis: uid=999 gid=1000)
+  runAsGroup: 1000
+volumes:
+  - name: data
+    emptyDir:
+      sizeLimit: 64Mi
+volumeMounts:
+  - name: data
+    mountPath: /data
+    readOnly: false
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+probes:
+  type: tcp
+  readiness:
+    timeoutSeconds: 1
+    periodSeconds: 5
+    failureThreshold: 3
+  liveness:
+    timeoutSeconds: 1
+    periodSeconds: 10
+    failureThreshold: 6
+terminationGracePeriodSeconds: 10

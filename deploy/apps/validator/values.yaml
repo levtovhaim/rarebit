@@ -1,0 +1,25 @@
+# The validator's HTTP API (apps/validator/README.md → Deploy). Its migrate Job is deploy/apps/validator-migrate.
+# The database URL is the environment's (deploy/envs/<env>/validator/values.yaml, extraEnv).
+owner: haimlevtov # catalog/validator.yaml
+tier: "1"
+image:
+  repository: rarebit/validator
+args: [serve]
+replicas: 2
+port: 8080
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+# TODO(human): probes, the preStop pause and the grace period for the validator.
+#   apps/validator/README.md → Deploy has the constraints; deploy/test/render.sh checks them.
+#   probes:
+#     type: http
+#     readiness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
+#     liveness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
+#   lifecycle:
+#     preStopSleepSeconds: ...
+#   terminationGracePeriodSeconds: ...

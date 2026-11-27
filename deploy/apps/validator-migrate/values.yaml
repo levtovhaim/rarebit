@@ -1,0 +1,18 @@
+# validator migrate: applies the schema migrations and loads the word lists shipped in the image
+# (/data/categories, ADR 0018), then exits (ADR 0014). It runs once per image tag: a new tag is a new Job.
+# The database URL is the environment's (deploy/envs/<env>/validator-migrate/values.yaml, extraEnv).
+mode: job
+owner: haimlevtov # catalog/validator.yaml
+tier: "1"
+image:
+  repository: rarebit/validator
+args: [migrate]
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+job:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
