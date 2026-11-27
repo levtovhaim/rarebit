@@ -35,9 +35,20 @@ subagents in `.claude/agents/` in parallel and fold their findings into the plan
 |---|---|
 | `security-reviewer` | `infra/`, `.github/`, `deploy/`, `platform/policies/`, or anything with IAM, OIDC, RBAC, secrets, images or network exposure |
 | `resilience-reviewer` | `apps/game`, `apps/validator`, `apps/bots`, `deploy/charts/`, `platform/cli/` (env up/down), or anything with drain, retries, reconnects or teardown order |
-| `docs-sync-reviewer` | every diff: it enforces the Documentation Map in `CLAUDE.md` |
-| `convention-compliance-reviewer` | every diff: it enforces the rules and conventions in `CLAUDE.md` |
 | `auditor` | `infra/`, `.github/`, `deploy/`, `platform/`: cost, IaC and GitOps hygiene. Its CRITICAL and HIGH findings are fixed or waived with a written reason. |
+| `convention-compliance-reviewer`, on a cheaper model (`model: sonnet`) | every diff. Tell it to also run the `docs-sync-reviewer` checklist (`.claude/agents/docs-sync-reviewer.md`): one agent checks both the rules and conventions and the Documentation Map in `CLAUDE.md` |
+
+**One review round per PR,** and it comes before anything that's costly to repeat:
+- **Self-check first.** Before dispatching anyone, fix what reviews keep finding:
+  - a doc the Documentation Map couples to the change;
+  - a number without its source;
+  - an ADR with more than one decision;
+  - a runbook missing a section of `docs/runbooks/_template.md`;
+  - a deferral without a linked issue;
+  - a claim written as true before it is;
+  - a new rule without a negative control.
+- **Then review once,** before any AWS apply or live run, so all the fixes land in one apply and one verification.
+- **No new round for follow-ups:** none for a docs-only change or for a small fix a live run turns up, unless it changes security-relevant behavior.
 
 For small scopes, check directly, in this order.
 
@@ -109,6 +120,6 @@ When the plan HAS items, end with: **"Shall I apply all of these, or pick specif
 
 ## Doc coupling
 
-The Documentation Map in `CLAUDE.md` is the contract, and `docs-sync-reviewer` enforces it. For
+The Documentation Map in `CLAUDE.md` is the contract, and the `docs-sync-reviewer` checklist enforces it. For
 small scopes, check it directly: a doc that should have changed in the same diff and didn't is a
 finding.

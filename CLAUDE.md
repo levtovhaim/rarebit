@@ -127,7 +127,7 @@
 | Parallel work | `using-git-worktrees` + `dispatching-parallel-agents` |
 | Adding or bumping any dependency | `dependency-versioning` |
 | UI work in `apps/web` | `frontend-design` while building; `web-design-guidelines` to review it |
-| Before merge | `cleanup`. It dispatches `security-reviewer`, `resilience-reviewer`, `docs-sync-reviewer` and `convention-compliance-reviewer` in parallel. |
+| Before merge (one round per PR, before any apply) | `cleanup`. It dispatches, in parallel, `security-reviewer`, `resilience-reviewer` or `auditor` as the diff needs, and one `convention-compliance-reviewer` on a cheaper model that also runs the `docs-sync-reviewer` checklist. |
 | Infra, CI and cost changes | `auditor` (`.claude/agents/auditor.md`); address its CRITICAL and HIGH findings |
 
 ## Review
