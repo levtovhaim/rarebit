@@ -1,3 +1,3 @@
-# Written by deploy/push-images.sh: game, built from 56f78e7863cb8171adb5e76c8ecb14d2e8d00a33.
+# Written by deploy/push-images.sh: game, built from ac668897462c758ce8cde836d3951834c623216c.
 image:
-  tag: main-56f78e7@sha256:ae461129d6f0265d76314fcdce2676e45064df627cab2a128304c29d43db0d86
+  tag: main-ac66889@sha256:1034419da16f63b13075edc3d608edd6c23f4889a37074ef2bfad683317d3978
