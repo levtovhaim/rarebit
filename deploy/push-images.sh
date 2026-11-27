@@ -33,11 +33,18 @@ sha="${commit:0:7}"
 
 # A clean checkout of exactly that commit, outside the repo, removed at the end
 build="$(mktemp -d)"
-# The ECR login can push to every repository for 12 hours: log out when done.
-trap 'docker logout "$registry" >/dev/null 2>&1 || true; git -C "$root" worktree remove --force "$build/src" >/dev/null 2>&1 || true; rm -rf "$build"' EXIT
+trap 'git -C "$root" worktree remove --force "$build/src" >/dev/null 2>&1 || true; rm -rf "$build"' EXIT
 git -C "$root" worktree add -q --detach "$build/src" "$commit"
 
-aws ecr get-login-password --region "$region" | docker login --username AWS --password-stdin "$registry" >/dev/null
+# The ECR login, which can push to every repository for 12 hours, goes into a Docker config of its
+# own in $build, removed with it at the end. Not the user's credential store: on Windows that's
+# Docker Desktop's, the Windows Credential Manager, which refuses a password over 2,560 bytes, and an
+# ECR token made from `aws login` credentials can be longer (2,749 bytes on 2026-11-27). Builds keep
+# the user's own config, so their builders and cache.
+login="$build/docker-login"
+mkdir -m 700 "$login"
+aws ecr get-login-password --region "$region" |
+  DOCKER_CONFIG="$login" docker login --username AWS --password-stdin "$registry" >/dev/null
 
 for svc in validator game web; do
   local_image="rarebit-$svc:main-$sha"
@@ -51,7 +58,7 @@ for svc in validator game web; do
     var="$(tr '[:lower:]' '[:upper:]' <<<"$svc")_IMAGE"
     make -C "$build/src" "$svc-image" "$var=$local_image"
     docker tag "$local_image" "$remote"
-    docker push -q "$remote"
+    DOCKER_CONFIG="$login" docker push -q "$remote"
     digest="$(docker image inspect "$remote" --format '{{range .RepoDigests}}{{println .}}{{end}}' |
       grep -m1 "^$registry/rarebit/$svc@" | cut -d@ -f2)"
     [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || die "no digest for $remote"
