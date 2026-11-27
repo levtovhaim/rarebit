@@ -106,7 +106,7 @@ variable "private_state_prefixes" {
 }
 
 variable "state_bucket" {
-  description = "The Terraform state bucket: the only bucket whose objects the tf_plan role may read (each unit's state)."
+  description = "The Terraform state bucket: the only bucket whose objects the tf_plan role may read (each unit's state, except those in private_state_prefixes)."
   type        = string
 
   validation {

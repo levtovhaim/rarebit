@@ -1,11 +1,11 @@
-# The account's cost guardrails (ADR 0041): three budgets and an anomaly monitor, made in the console
-# on 2026-11-23/24 and imported on 2026-11-27, with tags added. The anomaly subscription was replaced
-# then, for its new name and threshold.
+# The account's cost guardrails (ADR 0041): three budgets and an anomaly monitor, made or last changed
+# in the console on 2026-11-23/24 and imported on 2026-11-27, with tags added. The anomaly
+# subscription was replaced then, because the AWS provider replaces a subscription to rename it.
 #
-# The alert address is personal data: it comes from RAREBIT_ALERT_EMAIL in .mise.local.toml (git
-# ignores it), the module marks it sensitive, and this unit's state, which holds it, is the one state
-# the pull request plan role may not read (ADR 0041). Pull request plans skip this unit: plan it
-# locally (#62).
+# The alert address is personal data (ADR 0042): it comes from RAREBIT_ALERT_EMAIL in .mise.local.toml
+# (git ignores it), the module marks it sensitive, and this unit's state, which holds it, is listed in
+# private_state_units, so the pull request plan role may not read it. Plan this unit locally; the
+# plan workflow must skip it (#62). Edit these budgets only here, never in the console.
 
 include "root" {
   path   = find_in_parent_folders("root.hcl")
@@ -18,11 +18,18 @@ terraform {
 
 locals {
   account_id = include.root.locals.account_id
+
+  # This unit's state holds the alert address: it runs only while it's listed as private, so moving
+  # or renaming it can't leave its state readable by pull request plans (ADR 0042).
+  listed_private = regex("^listed$", contains(
+    read_terragrunt_config(find_in_parent_folders("shared.hcl")).locals.private_state_units,
+    path_relative_to_include("root")
+  ) ? "listed" : "${path_relative_to_include("root")} is not in private_state_units")
 }
 
 inputs = {
   # Empty when unset: the module refuses it at plan, and other units don't need it.
-  alert_email = get_env("RAREBIT_ALERT_EMAIL", "")
+  alert_email = local.listed_private == "listed" ? get_env("RAREBIT_ALERT_EMAIL", "") : ""
 
   # Times are UTC, as AWS Budgets holds them.
   budgets = {

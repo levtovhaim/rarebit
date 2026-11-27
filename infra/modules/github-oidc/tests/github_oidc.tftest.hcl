@@ -187,6 +187,14 @@ run "the_plan_role_reads_configuration_and_writes_nothing" {
   assert {
     condition = anytrue([
       for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
+      s.Effect == "Deny" && s.Resource == "*" && length(setsubtract(["cloudtrail:LookupEvents", "cloudtrail:GetQueryResults"], flatten([s.Action]))) == 0
+    ])
+    error_message = "The tf_plan role can't read CloudTrail's event history: it holds every management call's parameters, alert addresses among them."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
       s.Effect == "Deny" && s.Action == "s3:GetObject*" && try(s.NotResource, "") == "arn:aws:s3:::test-tfstate/*"
     ])
     error_message = "The tf_plan role reads objects only in the state bucket."
@@ -203,10 +211,23 @@ run "the_plan_role_cant_read_private_state" {
   assert {
     condition = anytrue([
       for s in jsondecode(aws_iam_role_policy.this["tf_plan"].policy).Statement :
-      s.Effect == "Deny" && s.Action == "s3:GetObject*" && try(s.Resource, []) == ["arn:aws:s3:::test-tfstate/_global/cost-alerts/*"]
+      s.Effect == "Deny" && s.Action == "s3:GetObject*" && try(s.Resource, []) == [
+        "arn:aws:s3:::test-tfstate/_global/cost-alerts/*",
+        "arn:aws:s3:::test-tfstate/env:/*/_global/cost-alerts/*",
+      ]
     ])
-    error_message = "The tf_plan role can't read the state of a unit whose state holds personal data."
+    error_message = "The tf_plan role can't read the state of a unit whose state holds personal data, in any workspace."
   }
+}
+
+run "rejects_a_private_state_prefix_with_a_slash_or_wildcard" {
+  command = plan
+
+  variables {
+    private_state_prefixes = ["/_global/cost-alerts", "_global/*"]
+  }
+
+  expect_failures = [var.private_state_prefixes]
 }
 
 run "no_private_state_statement_without_private_units" {

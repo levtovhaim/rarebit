@@ -8,9 +8,13 @@ Every budget:
 - **emails `alert_email`** at each notification's percentage of its limit, `ACTUAL` (spent so far) or `FORECASTED` (AWS's projection for the period);
 - has **`prevent_destroy`**: a budget's history lives only in AWS, and a replaced one starts from nothing (ADR 0037).
 
-The anomaly monitor has `prevent_destroy` too: its model of expected spend is built from history. The subscription that emails about it doesn't: it holds no history, and AWS replaces a subscription to rename it. It emails once a day about anomalies worth it: the threshold is in `main.tf`, and the tests say what it is.
+The anomaly monitor has `prevent_destroy` too: its model of expected spend is built from history. The subscription that emails about it doesn't: it holds no history. The AWS provider replaces a subscription to rename it, and `create_before_destroy` makes the new one exist before the old one goes. It emails once a day about anomalies worth it: the threshold is in `main.tf`, and the tests say what it is.
 
-**`alert_email` is personal data.** It's marked sensitive, so plans print `(sensitive value)`, but state holds it in plain text: whoever can read the unit's state can read the address. The live unit takes it from the environment and its state is closed to pull request plans (ADR 0041).
+**`alert_email` is personal data** (ADR 0042):
+
+- it's marked sensitive, so plans print `(sensitive value)`; that hides the budgets' `notification` blocks too, so the `notifications` output lists their types and thresholds in the clear, and a threshold change shows there;
+- state holds it in plain text: whoever can read the unit's state can read the address. The live unit takes it from the environment, and its state is closed to pull request plans;
+- `terragrunt render --format json`, `plan -json` and `show -json` print it: never paste their output anywhere.
 
 It's applied from `infra/live/_global/cost-alerts`, which imported the budgets and the monitor that were made in the console.
 
@@ -74,7 +78,7 @@ A plan reads the monitor and the subscription through the Cost Explorer API, whi
 | alert\_email | Where every budget alert and anomaly alert goes. Personal data: it comes from the environment, never from git, and is marked sensitive so plans don't print it. | `string` | n/a | yes |
 | anomaly\_monitor\_name | Name of the cost anomaly monitor that watches the whole account. | `string` | n/a | yes |
 | anomaly\_subscription\_name | Name of the daily anomaly alert subscription for that monitor. | `string` | n/a | yes |
-| budgets | The cost budgets, by key. Each counts usage before credits and refunds, in UnblendedCost, and emails alert\_email at each notification's percentage of its limit. | ```map(object({ name = string time_unit = string # DAILY, MONTHLY, QUARTERLY, ANNUALLY or CUSTOM limit_usd = number time_period_start = string # YYYY-MM-DD_hh:mm, UTC time_period_end = string # YYYY-MM-DD_hh:mm, UTC # The billing view the budget reads. The console names the account's primary view for some budgets # and none for others; set it exactly as AWS holds it, or an import plans a change. billing_view_arn = optional(string) notifications = list(object({ type = string # ACTUAL (spent so far) or FORECASTED (AWS's projection for the period) threshold = number # percent of limit_usd })) }))``` | n/a | yes |
+| budgets | The cost budgets, by key. Each counts usage before credits and refunds, in UnblendedCost, and emails alert\_email at each notification's percentage of its limit. Fields: name (unique); time\_unit (DAILY, MONTHLY, QUARTERLY, ANNUALLY or CUSTOM); limit\_usd; time\_period\_start and time\_period\_end (YYYY-MM-DD\_hh:mm, UTC; the end after the start); billing\_view\_arn (the billing view the budget reads: the console names the account's primary view for some budgets and none for others, so set it exactly as AWS holds it, or an import plans a change); notifications (1 to 5, no duplicates: type ACTUAL for spent so far or FORECASTED for AWS's projection for the period, threshold in percent of limit\_usd). | ```map(object({ name = string time_unit = string limit_usd = number time_period_start = string time_period_end = string billing_view_arn = optional(string) notifications = list(object({ type = string threshold = number })) }))``` | n/a | yes |
 
 ## Outputs
 
@@ -82,4 +86,5 @@ A plan reads the monitor and the subscription through the Cost Explorer API, whi
 | ---- | ----------- |
 | anomaly\_monitor\_arn | ARN of the anomaly monitor that watches the account. |
 | budget\_names | Budget name by key, as AWS Budgets shows them. |
+| notifications | Each budget's notifications (type and threshold), not sensitive: plans hide the notification blocks because they contain alert\_email, so a threshold change shows here instead. |
 <!-- END_TF_DOCS -->

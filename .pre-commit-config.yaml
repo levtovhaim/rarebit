@@ -46,6 +46,18 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: no-alert-address
+        name: no alert address in any file (RAREBIT_ALERT_EMAIL, ADR 0042)
+        # The cost alerts' address is personal data and the repository is public. gitleaks doesn't
+        # look for email addresses, so this hook fails when any file contains the value of
+        # RAREBIT_ALERT_EMAIL (set in .mise.local.toml), naming the file but never the address.
+        # Where the variable isn't set (CI, a fresh clone), there's nothing to look for.
+        entry: >-
+          bash -c '[ -n "${RAREBIT_ALERT_EMAIL:-}" ] || exit 0;
+          out="$(grep -liF -- "$RAREBIT_ALERT_EMAIL" "$@")";
+          [ -z "$out" ] || { printf "These files contain the alert address (RAREBIT_ALERT_EMAIL):\n%s\n" "$out"; exit 1; }' --
+        language: system
+        types: [text]
       - id: actionlint
         name: actionlint (GitHub Actions)
         entry: actionlint

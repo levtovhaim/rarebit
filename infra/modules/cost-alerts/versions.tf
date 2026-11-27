@@ -1,6 +1,6 @@
 terraform {
-  # ~> 1.17: the Terraform pinned in .mise.toml (1.17.2) and later 1.x releases. Nothing here needs a
-  # newer feature than mock_provider in tests (1.7).
+  # ~> 1.17: the Terraform pinned in .mise.toml (1.17.2) and later 1.x releases. The newest feature this
+  # module relies on is mock values during plan in tests (override_during), from 1.11.
   required_version = "~> 1.17"
 
   required_providers {

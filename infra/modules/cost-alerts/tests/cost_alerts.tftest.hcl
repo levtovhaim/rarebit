@@ -51,6 +51,10 @@ run "every_budget_counts_usage_before_credits" {
     ])
     error_message = "Every budget leaves out credits and refunds: on a credits plan, a budget that counts them reads $0 and never fires."
   }
+}
+
+run "budgets_are_built_as_given" {
+  command = plan
 
   assert {
     condition     = alltrue([for b in aws_budgets_budget.this : b.metrics == tolist(["UnblendedCost"]) && b.budget_type == "COST" && b.limit_unit == "USD"])
@@ -82,6 +86,15 @@ run "every_alert_goes_to_the_alert_email" {
   }
 
   assert {
+    condition     = [for s in aws_ce_anomaly_subscription.account.subscriber : s.address] == ["alerts@example.com"]
+    error_message = "The anomaly subscription emails alert_email."
+  }
+}
+
+run "each_budget_has_exactly_its_notifications" {
+  command = plan
+
+  assert {
     condition = (
       length(aws_budgets_budget.this["monthly"].notification) == 2 &&
       anytrue([for n in aws_budgets_budget.this["monthly"].notification : n.notification_type == "FORECASTED" && n.threshold == 100])
@@ -90,13 +103,17 @@ run "every_alert_goes_to_the_alert_email" {
   }
 
   assert {
-    condition     = [for s in aws_ce_anomaly_subscription.account.subscriber : s.address] == ["alerts@example.com"] && aws_ce_anomaly_subscription.account.frequency == "DAILY"
-    error_message = "The anomaly subscription emails alert_email once a day."
+    condition     = output.notifications == { monthly = ["ACTUAL > 50%", "FORECASTED > 100%"], credits = ["ACTUAL > 90%"] }
+    error_message = "The notifications output lists each budget's notifications in the clear, since plans hide the blocks that hold the address."
   }
+}
+
+run "the_subscription_listens_to_its_monitor_daily" {
+  command = plan
 
   assert {
-    condition     = aws_ce_anomaly_subscription.account.monitor_arn_list == tolist(["arn:aws:ce::000000000000:anomalymonitor/00000000-0000-0000-0000-000000000000"])
-    error_message = "The subscription listens to this module's monitor only."
+    condition     = aws_ce_anomaly_subscription.account.monitor_arn_list == tolist(["arn:aws:ce::000000000000:anomalymonitor/00000000-0000-0000-0000-000000000000"]) && aws_ce_anomaly_subscription.account.frequency == "DAILY"
+    error_message = "The subscription listens to this module's monitor only, once a day."
   }
 }
 
@@ -207,6 +224,128 @@ run "rejects_a_badly_written_period" {
         time_unit         = "MONTHLY"
         limit_usd         = 10
         time_period_start = "2026-08-01"
+        time_period_end   = "2087-06-15_00:00"
+        notifications     = [{ type = "ACTUAL", threshold = 100 }]
+      }
+    }
+  }
+
+  expect_failures = [var.budgets]
+}
+
+run "rejects_a_period_that_ends_before_it_starts" {
+  command = plan
+
+  variables {
+    budgets = {
+      backwards = {
+        name              = "backwards"
+        time_unit         = "CUSTOM"
+        limit_usd         = 10
+        time_period_start = "2027-02-26_00:00"
+        time_period_end   = "2026-11-23_00:00"
+        notifications     = [{ type = "ACTUAL", threshold = 100 }]
+      }
+    }
+  }
+
+  expect_failures = [var.budgets]
+}
+
+run "rejects_an_unknown_time_unit" {
+  command = plan
+
+  variables {
+    budgets = {
+      weekly = {
+        name              = "weekly"
+        time_unit         = "WEEKLY"
+        limit_usd         = 10
+        time_period_start = "2026-08-01_00:00"
+        time_period_end   = "2087-06-15_00:00"
+        notifications     = [{ type = "ACTUAL", threshold = 100 }]
+      }
+    }
+  }
+
+  expect_failures = [var.budgets]
+}
+
+run "rejects_an_unknown_notification_type" {
+  command = plan
+
+  variables {
+    budgets = {
+      odd = {
+        name              = "odd"
+        time_unit         = "MONTHLY"
+        limit_usd         = 10
+        time_period_start = "2026-08-01_00:00"
+        time_period_end   = "2087-06-15_00:00"
+        notifications     = [{ type = "EXPECTED", threshold = 100 }]
+      }
+    }
+  }
+
+  expect_failures = [var.budgets]
+}
+
+run "rejects_more_than_five_notifications" {
+  command = plan
+
+  variables {
+    budgets = {
+      noisy = {
+        name              = "noisy"
+        time_unit         = "MONTHLY"
+        limit_usd         = 10
+        time_period_start = "2026-08-01_00:00"
+        time_period_end   = "2087-06-15_00:00"
+        notifications     = [for t in [10, 20, 30, 40, 50, 60] : { type = "ACTUAL", threshold = t }]
+      }
+    }
+  }
+
+  expect_failures = [var.budgets]
+}
+
+run "rejects_a_repeated_notification" {
+  command = plan
+
+  variables {
+    budgets = {
+      twice = {
+        name              = "twice"
+        time_unit         = "MONTHLY"
+        limit_usd         = 10
+        time_period_start = "2026-08-01_00:00"
+        time_period_end   = "2087-06-15_00:00"
+        notifications     = [{ type = "ACTUAL", threshold = 90 }, { type = "ACTUAL", threshold = 90 }]
+      }
+    }
+  }
+
+  expect_failures = [var.budgets]
+}
+
+run "rejects_two_budgets_with_one_name" {
+  command = plan
+
+  variables {
+    budgets = {
+      a = {
+        name              = "same"
+        time_unit         = "MONTHLY"
+        limit_usd         = 10
+        time_period_start = "2026-08-01_00:00"
+        time_period_end   = "2087-06-15_00:00"
+        notifications     = [{ type = "ACTUAL", threshold = 90 }]
+      }
+      b = {
+        name              = "same"
+        time_unit         = "DAILY"
+        limit_usd         = 1
+        time_period_start = "2026-08-01_00:00"
         time_period_end   = "2087-06-15_00:00"
         notifications     = [{ type = "ACTUAL", threshold = 100 }]
       }

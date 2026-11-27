@@ -1,6 +1,6 @@
 # The account's cost guardrails (ADR 0041): budgets that email when spend passes a share of their
 # limit, and an anomaly monitor that emails when AWS sees spend it didn't expect. They were made in the
-# console first, and the live unit imports them.
+# console first; the live unit imported them on 2026-11-27.
 
 resource "aws_budgets_budget" "this" {
   for_each = var.budgets
@@ -82,5 +82,9 @@ resource "aws_ce_anomaly_subscription" "account" {
   }
 
   # No prevent_destroy: a subscription holds no history (the anomalies belong to the monitor), so
-  # replacing it loses nothing. AWS can't rename one in place: a new name replaces it.
+  # replacing it loses nothing. The AWS provider replaces a subscription to rename it; the new one is
+  # created first, so a failed create leaves the old one alerting.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

@@ -1,6 +1,6 @@
 # infra
 
-The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0041).
+The AWS infrastructure as code: plain Terraform modules, and a thin Terragrunt layer that applies them to the account (ADRs 0032–0042).
 
 ```
 infra/
@@ -45,7 +45,7 @@ Run these in WSL, inside the repo, where mise is active.
 
    Take it from `aws sts get-caller-identity --profile rarebit --query Account --output text`, after the check in step 2. Every unit's provider and backend refuse to run in any other account, and nothing runs while the variable is unset, empty or not 12 digits.
 
-   For `_global/cost-alerts`, add `RAREBIT_ALERT_EMAIL = "<address>"` to the same `[env]`: where the budget and anomaly alerts go (ADR 0041). Only that unit needs it.
+   For `_global/cost-alerts`, add `RAREBIT_ALERT_EMAIL = "<address>"` to the same `[env]`: where the budget and anomaly alerts go (ADR 0042). Only that unit needs it.
 
 Terragrunt keeps its working copies in `~/.cache/terragrunt` (`TG_DOWNLOAD_DIR` in `.mise.toml`), not in the checkout. On a Windows drive mounted into WSL, Terragrunt can't replace its own generated files (ADR 0033), so run Terragrunt only where mise is active. With `TG_PROVIDER_CACHE=1` (also in `.mise.toml`), Terragrunt keeps one copy of each provider for all units instead of one per working copy.
 
@@ -56,6 +56,8 @@ cd infra/live/_global/bootstrap
 terragrunt render --format json   # the effective config: generated provider, backend, inputs
 terragrunt plan                   # what would change; it reads state and takes the lock for a moment
 ```
+
+`render --format json`, `plan -json` and `show -json` print every input in the clear, sensitive ones included: for `_global/cost-alerts` that's the alert address. Don't paste their output anywhere (ADR 0042).
 
 These change real infrastructure or its state: `apply`, `destroy`, `import`, `refresh`, `taint`/`untaint`, `force-unlock`, `init -migrate-state`, and the `state` commands that write (`push`, `mv`, `rm`). A human runs them or approves the exact command (CLAUDE.md → Rules, rule 2), and says what the change costs per hour first. In agent sessions the permission prompt also asks for the read-only `state list`, `show` and `pull`.
 
@@ -77,4 +79,9 @@ The state bucket's unit is special the first time: its state starts in a local f
 - A module: `versions.tf` with the exact provider version, `variables.tf` and `outputs.tf` with descriptions, `README.md` with the terraform-docs markers, `examples/basic` (with `default_tags`), and tests in `tests/` with `mock_provider`. Then regenerate its table: `terraform-docs --config infra/.terraform-docs.yml infra/modules/<name>`. The provider's lock file goes in the module, its example and every unit that uses it, with hashes for all four platforms (`.claude/skills/dependency-versioning`).
 - A unit: a `terragrunt.hcl` that `include`s `root.hcl`, names its module with `terraform { source = ... }` and passes `inputs`. The backend and provider come from `root.hcl`: don't write them in the unit.
 - Names that more than one `_global` unit needs go in `_global/shared.hcl`, read with `read_terragrunt_config` (ADR 0039). A change there needs a plan and an apply of every unit that reads it.
+- A unit whose state will hold personal data or a secret value is private (ADR 0042). In this order:
+  1. take the value from the environment (`.mise.local.toml`), never from git, into a `sensitive` variable;
+  2. list the unit in `private_state_units` in `_global/shared.hcl`, and plan and apply `_global/github-oidc`, which denies its state to pull request plans;
+  3. give the unit the same check as `_global/cost-alerts`: it refuses to run unless it's listed;
+  4. only then apply the unit. Plan it locally: pull request plans can't read its state.
 - Removing a `generate` block doesn't remove the file it wrote: Terragrunt leaves it in the unit's working copy under `~/.cache/terragrunt`, and Terraform keeps reading it. Delete it there too (`find ~/.cache/terragrunt -name '<file>' -delete`). Seen on 2026-11-27 with the cost-alerts import blocks: harmless only because Terraform ignores an import block whose resource is already in state.

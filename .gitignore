@@ -20,6 +20,9 @@ CMakeUserPresets.json
 *.tfplan
 crash.log
 .terragrunt-cache/
+# Rendered configs and debug inputs hold resolved values, a private unit's alert address among them
+*.rendered.json
+*debug.tfvars*
 
 # Local config and secrets: config comes from env vars, secrets from External Secrets
 .env
