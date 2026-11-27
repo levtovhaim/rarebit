@@ -23,9 +23,9 @@
   - public, but answers only the operators' addresses (`admin_cidrs`, a `/24` or smaller, never `0.0.0.0/0`). The live unit takes it from `RAREBIT_ADMIN_CIDR` in `.mise.local.toml`, so no address is in git;
   - private access on, for the nodes.
 - **Access entries** (`authentication_mode = "API"`), not the `aws-auth` ConfigMap. Whoever runs the apply becomes the cluster admin, so no person's IAM name is written in git.
-- **One managed node group:** two t3.medium nodes, on-demand, AL2023. A spot interruption during a game is what this first environment exists to avoid; Karpenter, with spot first, replaces this node group later.
+- **One managed node group:** two c7i-flex.large nodes (2 vCPU, 4 GiB), on-demand, AL2023. The account's AWS Free plan launches only some instance types and refuses t3.medium (checked 2026-11-27); c7i-flex.large is the smallest it allows with that memory. A spot interruption during a game is what this first environment exists to avoid; Karpenter, with spot first, replaces this node group later.
 - **Add-ons managed by EKS,** each pinned to EKS's default version for 1.37 (2026-11-27):
-  - the VPC CNI, with prefix delegation, so a t3.medium runs more than 17 pods;
+  - the VPC CNI, with prefix delegation, so a node runs more pods than its interfaces' single addresses allow;
   - the Pod Identity agent, kube-proxy and CoreDNS;
   - the EBS CSI driver.
 - **Pod Identity** (`terraform-aws-modules/eks-pod-identity` 2.11.0) gives the EBS CSI driver and the AWS Load Balancer Controller their IAM roles: no OIDC provider, no service account annotations.
@@ -49,7 +49,7 @@
 ## Consequences
 
 - **Good:**
-  - about $0.20/h for the cluster and nodes, gone with the environment;
+  - about $0.29/h for the cluster and nodes, gone with the environment;
   - nobody but the operator's address reaches the API;
   - no IAM user name, account ID or address in git.
 - **Bad / risks:**

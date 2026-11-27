@@ -47,9 +47,9 @@ variable "admin_cidrs" {
 }
 
 variable "node_instance_types" {
-  description = "The managed node group's instance types, on-demand."
+  description = "The managed node group's instance types, on-demand. c7i-flex.large (2 vCPU, 4 GiB): the smallest the AWS Free plan launches with a t3.medium's memory (the plan refuses t3.medium)."
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["c7i-flex.large"]
 }
 
 variable "node_count" {

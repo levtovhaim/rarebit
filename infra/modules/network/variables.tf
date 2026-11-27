@@ -55,9 +55,9 @@ variable "cluster_name" {
 }
 
 variable "nat_instance_type" {
-  description = "The NAT instance's type (fck-nat on Graviton, arm64). A t4g.nano is enough for image pulls and the game's egress."
+  description = "The NAT instance's type (fck-nat on Graviton, arm64). A t4g.micro is enough for image pulls and the game's egress, and it's one the AWS Free plan launches (t4g.nano isn't)."
   type        = string
-  default     = "t4g.nano"
+  default     = "t4g.micro"
 
   validation {
     condition     = can(regex("^t4g\\.", var.nat_instance_type))

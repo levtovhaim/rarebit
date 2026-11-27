@@ -41,8 +41,8 @@ module "eks" {
   # Each add-on's version is EKS's default for 1.37 on 2026-11-27 (aws eks describe-addon-versions),
   # pinned, so a new cluster gets the same versions as the last one (rule 4).
   addons = {
-    # Prefix delegation: each network interface gets /28 prefixes, so a t3.medium runs far more than its
-    # 17 pods without it. Installed before the nodes, so they come up with it.
+    # Prefix delegation: each network interface gets /28 prefixes, so a node runs far more pods than its
+    # interfaces' single addresses would allow. Installed before the nodes, so they come up with it.
     vpc-cni = {
       addon_version  = "v1.22.4-eksbuild.14"
       before_compute = true

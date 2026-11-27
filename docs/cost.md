@@ -22,12 +22,12 @@ Prod (`infra/live/prod`, ADRs 0046–0048) exists only while a session runs: it'
 | Resource | $/h |
 |---|---|
 | EKS control plane (standard support) | 0.100 |
-| 2 × t3.medium nodes, on-demand | 0.096 |
+| 2 × c7i-flex.large nodes, on-demand (the AWS Free plan refuses t3.medium) | 0.194 |
 | ALB (hourly, plus about 0.004 of capacity units at this traffic) | 0.031 |
 | 4 public IPv4 addresses (the NAT instance's Elastic IP and the public address its launch template also gives it, the ALB's two) | 0.020 |
-| NAT instance (t4g.nano, fck-nat) | 0.005 |
+| NAT instance (t4g.micro, fck-nat; the Free plan refuses t4g.nano) | 0.010 |
 | EBS: the nodes' and the NAT instance's root volumes and Postgres's 2 GiB, about 50 GB | 0.007 |
-| **Total** | **≈ 0.26** |
+| **Total** | **≈ 0.36** |
 
 No NAT Gateway ($0.052/h and $0.052/GB, ADR 0046), no interface endpoints ($0.012/h per zone each), no control-plane logs. Infracost isn't wired into pull requests yet (#61), so this table is the estimate; the next day's Cost Explorer actuals are compared with it.
 

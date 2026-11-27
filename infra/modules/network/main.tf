@@ -100,7 +100,7 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-# The NAT instance: fck-nat on a t4g.nano in an Auto Scaling group of one, which replaces it if it dies
+# The NAT instance: fck-nat on a t4g.micro in an Auto Scaling group of one, which replaces it if it dies
 # (ADR 0046). Its static network interface keeps the Elastic IP and the private route across a
 # replacement. The module adds the private route table's default route through it.
 resource "aws_eip" "nat" {

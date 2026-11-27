@@ -5,7 +5,7 @@ An environment's EKS cluster (ADR 0047), wrapping [terraform-aws-modules/eks](ht
 - **Kubernetes 1.37** in the given private subnets.
 - **The API endpoint** is public but answers only `admin_cidrs`, the operators' own addresses (a `/24` or smaller; never `0.0.0.0/0`). Private access is on for the nodes.
 - **Access entries.** Whoever runs the apply becomes the cluster's admin, so no IAM user name is written in git.
-- **One managed node group:** `node_count` on-demand nodes (default 2 × t3.medium, AL2023). Karpenter replaces it later.
+- **One managed node group:** `node_count` on-demand nodes (default 2 × c7i-flex.large, AL2023: the AWS Free plan refuses t3.medium). Karpenter replaces it later.
 - **Add-ons, each pinned:** the VPC CNI with prefix delegation, the Pod Identity agent, kube-proxy, CoreDNS and the EBS CSI driver.
 - **Pod Identity roles** ([eks-pod-identity](https://github.com/terraform-aws-modules/terraform-aws-eks-pod-identity) 2.11.0) for the EBS CSI driver and for the AWS Load Balancer Controller (`kube-system/aws-load-balancer-controller`).
 - **Left out on purpose:** control-plane logs, a customer-managed KMS key and an IRSA OIDC provider (cost), and deletion protection (the environment is destroyed every night, by a person).
@@ -68,7 +68,7 @@ module "eks" {
 | subnet\_ids | The private subnets for the nodes, the pods and the control plane's network interfaces, in at least two zones. | `list(string)` | n/a | yes |
 | vpc\_id | The VPC (infra/modules/network). | `string` | n/a | yes |
 | node\_count | How many nodes the managed node group runs (it can grow by one during a rolling update). | `number` | `2` | no |
-| node\_instance\_types | The managed node group's instance types, on-demand. | `list(string)` | ```[ "t3.medium" ]``` | no |
+| node\_instance\_types | The managed node group's instance types, on-demand. c7i-flex.large (2 vCPU, 4 GiB): the smallest the AWS Free plan launches with a t3.medium's memory (the plan refuses t3.medium). | `list(string)` | ```[ "c7i-flex.large" ]``` | no |
 
 ## Outputs
 

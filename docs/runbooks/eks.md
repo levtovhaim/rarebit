@@ -12,7 +12,7 @@ Everything here changes AWS or the cluster, so a person runs it (CLAUDE.md rule 
 - `RAREBIT_AWS_ACCOUNT_ID`;
 - `RAREBIT_ADMIN_CIDR`, your own address as a `/32` (`curl -s https://checkip.amazonaws.com`). It's the only address the cluster's API answers.
 
-**Cost while it's up:** about $0.26/h (`docs/cost.md`). That's the control plane, two t3.medium nodes, the NAT instance and the public addresses, the ALB and the volumes. Tear it down when the session ends.
+**Cost while it's up:** about $0.36/h (`docs/cost.md`). That's the control plane, two c7i-flex.large nodes, the NAT instance and the public addresses, the ALB and the volumes. Tear it down when the session ends.
 
 ## What it means
 
@@ -24,7 +24,8 @@ Everything here changes AWS or the cluster, so a person runs it (CLAUDE.md rule 
 | `kubectl` times out | Your address changed since the apply: set `RAREBIT_ADMIN_CIDR` again and apply `eks` (a few seconds) |
 | Postgres's claim stays `Pending` | No default StorageClass: `kubectl get storageclass` must show `ebs-csi-default-sc (default)`, from the EBS CSI add-on's configuration |
 | No ALB appears (`kubectl get ingress` shows no address) | Read the LB controller's logs: `kubectl -n kube-system logs deploy/aws-load-balancer-controller`. Usually a missing subnet tag, or its Pod Identity role |
-| Pods stuck `Pending` | `kubectl describe pod`: two t3.medium nodes are full, or a volume can't attach (the EBS CSI driver) |
+| An Auto Scaling group or node group fails with `not eligible for Free Tier` | The account is on the AWS Free plan, which launches only some instance types (`aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true`): use one of those. The real error is in `aws autoscaling describe-scaling-activities`; the apply shows only "Authentication Failure" |
+| Pods stuck `Pending` | `kubectl describe pod`: two c7i-flex.large nodes are full, or a volume can't attach (the EBS CSI driver) |
 | `validator-migrate` Job fails | Postgres isn't ready yet, or the Secret `rarebit-pg-app` doesn't exist: wait for the cluster, then run step 9's `deploy validator-migrate` again |
 | The page loads but the game says it can't connect | `ALLOWED_ORIGINS` doesn't match the page's origin (step 10) |
 | `push-images.sh` fails part way | Run it again: images already pushed for that commit are kept, the rest are built |

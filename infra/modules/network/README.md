@@ -6,7 +6,7 @@ The VPC an environment's EKS cluster runs in (ADR 0046):
 - **Public subnets** hold the ALB and the NAT instance. They hand out no public IPs and are tagged `kubernetes.io/role/elb`, so the AWS Load Balancer Controller puts internet-facing ALBs there.
 - **Private subnets** hold the nodes and the pods. They're tagged `kubernetes.io/role/internal-elb` and `karpenter.sh/discovery = <cluster_name>`.
 - **Routes:** the public subnets route `0.0.0.0/0` to the internet gateway, the private ones through the NAT instance.
-- **The NAT instance:** [fck-nat](https://github.com/RaJiska/terraform-aws-fck-nat) 1.6.1 on a t4g.nano, in an Auto Scaling group of one, with an Elastic IP. **No NAT Gateway** (CLAUDE.md rule 6).
+- **The NAT instance:** [fck-nat](https://github.com/RaJiska/terraform-aws-fck-nat) 1.6.1 on a t4g.micro, in an Auto Scaling group of one, with an Elastic IP. **No NAT Gateway** (CLAUDE.md rule 6).
 - **An S3 gateway endpoint** (free) on the private route table: ECR's image layers skip the NAT instance.
 
 It's applied from `infra/live/prod/network`.
@@ -74,7 +74,7 @@ module "network" {
 | private\_subnets | Availability zone => IPv4 range of the private subnet there: the nodes and the pods. | `map(string)` | n/a | yes |
 | public\_subnets | Availability zone => IPv4 range of the public subnet there: the load balancer and the NAT instance. | `map(string)` | n/a | yes |
 | nat\_ami\_id | The fck-nat AMI the NAT instance runs, pinned rather than the newest one published: fck-nat-al2023-hvm-1.4.0-20261109-arm64-ebs (2026-11-09) in eu-central-1. Bump it deliberately. | `string` | `"ami-02e293c9250757cfa"` | no |
-| nat\_instance\_type | The NAT instance's type (fck-nat on Graviton, arm64). A t4g.nano is enough for image pulls and the game's egress. | `string` | `"t4g.nano"` | no |
+| nat\_instance\_type | The NAT instance's type (fck-nat on Graviton, arm64). A t4g.micro is enough for image pulls and the game's egress, and it's one the AWS Free plan launches (t4g.nano isn't). | `string` | `"t4g.micro"` | no |
 
 ## Outputs
 
