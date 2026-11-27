@@ -39,13 +39,18 @@ ingress:
     - path: /socket.io
       pathType: Prefix
 
-# TODO(human): probes, the preStop pause and the grace period for the game server.
-#   apps/game/README.md (Shutdown, and the image's notes) has the constraints; deploy/test/render.sh
-#   checks them.
-#   probes:
-#     type: http
-#     readiness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
-#     liveness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
-#   lifecycle:
-#     preStopSleepSeconds: ...
-#   terminationGracePeriodSeconds: ...
+probes:
+  type: http
+  readiness:
+    path: /readyz        # 503 while draining or when Redis is down: the pod gets no new players
+    timeoutSeconds: 2    # /readyz waits up to 1 s for its Redis write; Kubernetes' default of 1 s would time out first
+    periodSeconds: 5     # checked every 5 s...
+    failureThreshold: 2  # ...so a pod that lost Redis leaves the Service within about 10 s
+  liveness:
+    path: /healthz       # "the process serves HTTP"; it never checks Redis
+    timeoutSeconds: 2
+    periodSeconds: 10
+    failureThreshold: 3  # 30 s of failures before a restart: a slow moment never kills a pod with live games
+lifecycle:
+  preStopSleepSeconds: 0 # no pause: the game keeps serving for DRAIN_DELAY_SECONDS (15 s) by itself
+terminationGracePeriodSeconds: 30 # > 15 drain + 1 notice + 10 shutdown = 26, with a 4 s margin

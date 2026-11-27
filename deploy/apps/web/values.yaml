@@ -34,13 +34,19 @@ ingress:
     - path: /
       pathType: Prefix
 
-# TODO(human): probes, the preStop pause and the grace period for the web UI.
-#   apps/web/README.md → Settings the deployment must get right has the constraints;
-#   deploy/test/render.sh checks them. Its stop signal is the image's SIGQUIT, nginx's graceful stop.
-#   probes:
-#     type: http
-#     readiness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
-#     liveness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
-#   lifecycle:
-#     preStopSleepSeconds: ...
-#   terminationGracePeriodSeconds: ...
+probes:
+  type: http
+  readiness:
+    path: /readyz        # 200 while nginx accepts connections; it serves files from the image, no dependencies
+    timeoutSeconds: 1    # a static answer: 1 s is plenty
+    periodSeconds: 5
+    failureThreshold: 2
+  liveness:
+    path: /healthz
+    timeoutSeconds: 1
+    periodSeconds: 10
+    failureThreshold: 3
+lifecycle:
+  preStopSleepSeconds: 15 # nginx refuses new connections the moment SIGQUIT arrives, so wait while the
+                          # Service and the ALB drop the pod (deregistration delay above: 15 s)
+terminationGracePeriodSeconds: 30 # > 15 pause + 10 nginx drain = 25, with a 5 s margin

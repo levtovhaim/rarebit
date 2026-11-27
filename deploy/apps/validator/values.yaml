@@ -14,12 +14,18 @@ resources:
   limits:
     memory: 128Mi
 
-# TODO(human): probes, the preStop pause and the grace period for the validator.
-#   apps/validator/README.md → Deploy has the constraints; deploy/test/render.sh checks them.
-#   probes:
-#     type: http
-#     readiness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
-#     liveness: {path: ..., timeoutSeconds: ..., periodSeconds: ..., failureThreshold: ...}
-#   lifecycle:
-#     preStopSleepSeconds: ...
-#   terminationGracePeriodSeconds: ...
+probes:
+  type: http
+  readiness:
+    path: /readyz        # 503 while draining, before the first migrate, or when Postgres is unreachable
+    timeoutSeconds: 2    # the readiness check itself takes up to 1 s
+    periodSeconds: 5
+    failureThreshold: 3  # the README asks for 3+: one slow Postgres check doesn't take a pod out
+  liveness:
+    path: /healthz       # never checks Postgres: a database outage must not restart every pod
+    timeoutSeconds: 2
+    periodSeconds: 10
+    failureThreshold: 3
+lifecycle:
+  preStopSleepSeconds: 0 # VALIDATOR_DRAIN_DELAY (5 s) already keeps it serving; the README says "not both"
+terminationGracePeriodSeconds: 32 # > 0 preStop + 5 drain + 20 shutdown + 3 = 28, with a 4 s margin
