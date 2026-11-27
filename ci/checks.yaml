@@ -23,6 +23,9 @@ all:
 checks:
   infra:
     - infra/
+  deploy:
+    - deploy/
+    - catalog/ # the chart's owner and tier labels come from the catalog
   native:
     - native/
     - data/categories/ # rarebit-cli's tests load the real word lists

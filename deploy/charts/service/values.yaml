@@ -1,0 +1,78 @@
+# Defaults for deploy/charts/service (ADR 0045). A service's own values live in
+# deploy/apps/<service>/values.yaml, and an environment's in deploy/envs/<env>/<service>/: values.yaml
+# and image-tags.yaml. values.schema.json refuses anything the golden path doesn't allow.
+
+# The name of every object. Defaults to the release name.
+nameOverride: ""
+
+# deployment: a long-running service. job: a task that runs to completion (validator migrate).
+mode: deployment
+
+image:
+  # The registry's host, set at install time. Our ECR registry's host holds the account ID, which
+  # stays out of git (ADR 0035).
+  registry: ""
+  repository: ""
+  # <tag>@sha256:<digest>. The digest is required, so a tag can never point at another image; our
+  # images use main-<sha7> or pr-<number>-<sha7> as the tag (CLAUDE.md → Conventions).
+  tag: ""
+
+# From catalog/<service>.yaml: the owner's GitHub login (spec.owner without "user:") and the tier.
+owner: ""
+tier: ""
+
+replicas: 2
+rollout:
+  # RollingUpdate keeps the replica count up during a rollout. Recreate stops the old pod first: for a
+  # single-replica store (Redis), where two pods side by side would split the state.
+  strategy: RollingUpdate
+  # New pods started at once in a rollout; for the game, all of them, so each player reconnects once.
+  maxSurge: 1
+# Leave a node that stops answering after 30 s instead of Kubernetes' 300 s: for a single replica.
+fastNodeFailover: false
+args: []
+# Environment variables (Kubernetes EnvVar objects), from deploy/apps/<service>/values.yaml.
+env: []
+# More of them from an environment's values: Helm replaces lists, it doesn't merge them.
+extraEnv: []
+
+# The port the service listens on, by name and number, and an optional metrics port.
+portName: http
+port: 8080
+metricsPort: null
+
+# Required for a deployment: type (http or tcp), then readiness and liveness, each with
+# timeoutSeconds, periodSeconds and failureThreshold (and path for http).
+probes: null
+lifecycle:
+  # A pause before the stop signal, for a process that stops accepting connections at once (nginx).
+  preStopSleepSeconds: 0
+# Required for a deployment: longer than everything the service does after the stop signal.
+terminationGracePeriodSeconds: null
+
+# Required: requests.cpu, requests.memory and limits.memory. No CPU limit: it only throttles.
+resources: {}
+
+# The image's numeric user and group; the pod runs as them, never as root.
+securityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+
+# An emptyDir at /tmp, for an image that writes there (the root filesystem is read-only).
+tmpVolume: false
+volumes: []
+volumeMounts: []
+
+ingress:
+  enabled: false
+  className: alb
+  # The group, scheme, listener, target type and health check are the chart's (templates/ingress.yaml).
+  # A service sets only alb.ingress.kubernetes.io/group.order and .../target-group-attributes.
+  annotations: {}
+  paths: []
+
+job:
+  # migrate gives up on a database that isn't there yet within seconds; on a fresh cluster Postgres
+  # takes minutes, so the Job retries for up to 15 minutes.
+  backoffLimit: 6
+  activeDeadlineSeconds: 900

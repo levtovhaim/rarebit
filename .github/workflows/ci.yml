@@ -128,6 +128,18 @@ jobs:
       tools: terraform terragrunt
       targets: infra
 
+  deploy:
+    needs: [runners, changes]
+    if: contains(fromJSON(needs.changes.outputs.checks), 'deploy')
+    uses: ./.github/workflows/_make.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+    with:
+      runner-labels: ${{ needs.runners.outputs.labels }}
+      class: light
+      tools: helm kubeconform jq aqua:mikefarah/yq
+      targets: deploy
+
   # native and validator are the compile-bound checks, so heavy-build, until #67's measurements
   # settle whether they're past ADR 0005's break-even (docs/benchmarks/ci-runners.md).
   native:
@@ -195,7 +207,7 @@ jobs:
 
   ci-ok:
     name: ci-ok
-    needs: [runners, changes, gate-tests, lint, infra, native, validator, game, web, bots]
+    needs: [runners, changes, gate-tests, lint, infra, deploy, native, validator, game, web, bots]
     # always(), not !cancelled(): GitHub counts a skipped required check as passed, so ci-ok must run,
     # and fail, when the run is cancelled or a job it waits for failed.
     if: always()

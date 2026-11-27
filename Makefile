@@ -5,7 +5,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: help check infra native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web web-image web-image-smoke up smoke down kind-up kind-down
+.PHONY: help check infra deploy native hebrew-lib validator validator-integration validator-image validator-image-smoke game game-integration game-image game-image-smoke bots bots-integration bots-image bots-image-smoke web web-image web-image-smoke up smoke down kind-up kind-down
 
 help: ## Show the targets
 	@grep -hE '^[a-zA-Z_ -]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-24s %s\n", $$1, $$2}'
@@ -60,6 +60,9 @@ infra: ## Check infra/ with no AWS credentials: validate and test each module (A
 		echo "make infra: a destroy would reach $$(grep '^_global/' <<<"$$destroyed" | tr '\n' ' ')(the exclude block in infra/live/root.hcl)" >&2; exit 1; \
 	fi; \
 	echo "$$(grep -c '^_global/' <<<"$$planned") _global units, none queued for destroy"
+
+deploy: ## Lint the shared Helm chart, render every service in deploy/apps, validate it with kubeconform, run the chart tests
+	bash deploy/test/render.sh
 
 # The CMake preset for this OS (native/CMakePresets.json): Windows sets OS=Windows_NT, macOS
 # reports Darwin, anything else (Linux, WSL) uses GCC. Override it, e.g. for the sanitizer

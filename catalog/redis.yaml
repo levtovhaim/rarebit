@@ -1,0 +1,17 @@
+# Service catalog entry (catalog/README.md).
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: redis
+  description: The game's rooms, round timers, matchmaking and Socket.IO fan-out between game pods (ADR 0019). In the cluster, one replica with nothing saved to disk.
+  labels:
+    tier: "1" # without it no room can be created or played
+  links:
+    - url: https://github.com/levtovhaim/rarebit/blob/main/docs/adr/0019-game-state-in-redis.md
+      title: ADR 0019
+spec:
+  type: cache
+  lifecycle: experimental
+  owner: user:haimlevtov
+  system: rarebit
+# SLOs: none yet; the game's readiness fails when Redis does (apps/game/README.md).

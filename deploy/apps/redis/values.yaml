@@ -1,0 +1,67 @@
+# Redis for the game's rooms, timers and fan-out (ADR 0019), the same image the local stack uses.
+# One replica, nothing saved to disk: a restart loses the rooms in play, and players start new ones.
+# It needs a password (the Secret redis, docs/runbooks/eks.md): its image turns protected mode off.
+# Failover, persistence and a memory cap per key prefix are #30, #31 and #52; NetworkPolicies and
+# pulling it through ECR are #72.
+owner: haimlevtov # catalog/redis.yaml
+tier: "1"
+image:
+  registry: docker.io
+  repository: library/redis
+  tag: 8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+replicas: 1
+# Never two Redis pods side by side: the game would split its rooms between them.
+rollout:
+  strategy: Recreate
+fastNodeFailover: true
+env:
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: redis
+        key: password
+args:
+  - redis-server
+  - --requirepass
+  - $(REDIS_PASSWORD)
+  - --save
+  - ""
+  - --appendonly
+  - "no"
+  # Well below the container's memory limit (fragmentation and overhead need room), and refuse writes
+  # when full rather than evict a game's keys
+  - --maxmemory
+  - 160mb
+  - --maxmemory-policy
+  - noeviction
+portName: redis
+port: 6379
+securityContext:
+  runAsUser: 999 # the image's redis user (id redis: uid=999 gid=1000)
+  runAsGroup: 1000
+volumes:
+  - name: data
+    emptyDir:
+      sizeLimit: 64Mi
+volumeMounts:
+  - name: data
+    mountPath: /data
+    readOnly: false
+# The memory request equals the limit: under memory pressure the kubelet evicts Redis last.
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    memory: 256Mi
+probes:
+  type: tcp
+  readiness:
+    timeoutSeconds: 1
+    periodSeconds: 5
+    failureThreshold: 3
+  liveness:
+    timeoutSeconds: 1
+    periodSeconds: 10
+    failureThreshold: 6
+terminationGracePeriodSeconds: 10

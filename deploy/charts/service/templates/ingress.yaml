@@ -1,0 +1,38 @@
+{{- if and (eq .Values.mode "deployment") .Values.ingress.enabled }}
+{{- $name := include "service.name" . }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+  annotations:
+    # The one internet-facing ALB, shared through IngressGroup rarebit (CLAUDE.md rule 6). These are the
+    # group's settings, the same on every Ingress in it, so they're the chart's, not a service's.
+    alb.ingress.kubernetes.io/group.name: rarebit
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http.drop_invalid_header_fields.enabled=true
+    # Pods as targets, checked on /readyz every 5 s; two passes make a new pod healthy.
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          {{- range .Values.ingress.paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  name: {{ $.Values.portName }}
+          {{- end }}
+{{- end }}
