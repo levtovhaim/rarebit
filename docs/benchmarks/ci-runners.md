@@ -1,6 +1,6 @@
 # CI runner evaluation
 
-Compares GitHub-hosted runners with Incredibuild runners for the job classes this repo will run. This first round is a **spike**: it records what each fleet offers and how it behaves on small, reproducible workloads, before any real CI exists. Later rounds use the real build: `runner-edge.yml`, built together with the runner policy (`ci/runner-policy.yaml`), and after it burst, cache and compile benchmarks.
+Compares GitHub-hosted runners with Incredibuild runners for the job classes this repo will run. This first round is a **spike**: it records what each fleet offers and how it behaves on small, reproducible workloads, before any real CI exists. Later rounds use the real build: `runner-edge.yml` (next, now that the runner policy `ci/runner-policy.yaml` exists; #67), and after it burst, cache and compile benchmarks.
 
 ## Setup
 
@@ -69,6 +69,8 @@ All three Incredibuild labels were served, Arm and Windows included. Both Linux 
 | `incredibuild-ubuntu-2404-arm` | 8 min 38 s | 2 min 33 s |
 | `windows-2022` | 2 s | 2 s |
 | `incredibuild-windows-2022` | 3 min 39 s | 2 min 21 s |
+
+Later samples, from the runner policy's proof workflow (one no-op job each, so not yet a measurement): `incredibuild-ubuntu-2404` queued **41 s** (run 45956498946, 2026-11-27 07:09Z) and **11 s** (run 45958010438, 07:22Z). That's far below the spike's start-up; `runner-edge.yml` re-measures it with medians (#67).
 
 ### Linux x64 measurements (seconds unless noted)
 
