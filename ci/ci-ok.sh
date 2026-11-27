@@ -3,12 +3,14 @@
 #
 # ci-ok waits for every other job in ci.yml. Each of them is one of two kinds:
 #   - a check from ci/checks.yaml (infra, native, ...): it runs only when the changes job picked it
-#   - a job every run needs: the resolver (runners), the changes job, lint
+#   - a job every run needs: the resolver (runners), the changes job, the gate tests, lint
 #
 # Inputs (environment):
 #   NEEDS      the ci-ok job's toJSON(needs): {"<job>": {"result": "success", "outputs": {...}}, ...}
 #   CHECKS     the changes job's output: the checks it picked, as a JSON list. Anything else (the
 #              changes job failed, or its output went missing) counts as every check picked.
+#   EVENT      the run's event. On anything but pull_request (the merge queue, main, a manual run),
+#              every check counts as picked, whatever CHECKS says: those runs run every check.
 #   CI_CHECKS  the checks file (default: checks.yaml next to this script)
 #
 # Prints a table of each job's verdict on stdout (and in the job summary when GITHUB_STEP_SUMMARY is
@@ -32,9 +34,9 @@ jq -e 'type == "object" and length > 0 and all(.[]; type == "object" and (.resul
 mapfile -t checks < <(yq '.checks | keys | .[]' "$file")
 [ "${#checks[@]}" -gt 0 ] || die "no checks in $(printf '%q' "$file")"
 
-# The checks this run picked. When that's unknown, every check counts as picked, so each one must
-# have passed: ci-ok fails closed.
-if jq -e 'type == "array" and all(.[]; type == "string")' <<<"${CHECKS:-}" >/dev/null 2>&1; then
+# The checks this run picked. Outside a pull request, or when that's unknown, every check counts as
+# picked, so each one must have passed: ci-ok fails closed.
+if [ "${EVENT:-}" = pull_request ] && jq -e 'type == "array" and all(.[]; type == "string")' <<<"${CHECKS:-}" >/dev/null 2>&1; then
   mapfile -t picked < <(jq -r '.[]' <<<"$CHECKS")
 else
   picked=("${checks[@]}")

@@ -25,6 +25,7 @@ checks:
     - infra/
   native:
     - native/
+    - data/categories/ # rarebit-cli's tests load the real word lists
   validator:
     - apps/validator/
     - native/ # cgo links native/hebrew-normalize
@@ -33,6 +34,7 @@ checks:
     - apps/game/
   web:
     - apps/web/
+    - apps/game/README.md # a web test checks every error code listed there has its UI text
   bots:
     - apps/bots/
     - apps/game/ # the integration tests run the real game servers

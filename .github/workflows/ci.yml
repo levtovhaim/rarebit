@@ -2,15 +2,17 @@ name: ci
 
 # The checks for every pull request (ADR 0043). Lint runs on every change; each other check runs when
 # the change touches a path it covers (ci/checks.yaml). ci-ok sums them up: it's the one check the
-# main ruleset will require. The merge queue, main and manual runs run every check.
+# main ruleset will require. The merge queue, main and manual runs (on main only) run every check.
 #
-# Each job runs make with the .mise.toml pins (ADR 0044, .github/workflows/_make.yml), on the runner
-# the policy picks for its class (ADR 0005).
+# Each check runs make with the .mise.toml pins (ADR 0044, .github/workflows/_make.yml), on the runner
+# the policy picks for its class (ADR 0005). The jobs that pick the checks and decide ci-ok are class
+# gate, which never leaves GitHub-hosted runners.
 #
-# A pull request runs its own version of this file and of ci/: a change to them is caught in review
-# (CODEOWNERS), not by these checks. Fork pull requests run only after a maintainer approves them (the
-# repository's setting for all external contributors); the heavy-build jobs start Incredibuild
-# runners, so check a fork's .github/, ci/ and Makefile changes before approving.
+# A pull request runs its own version of this file, of ci/ and of every script and test its checks
+# run: a change to the CI wiring is caught in review (CODEOWNERS), not by these checks. Fork pull
+# requests run only after a maintainer approves them (the repository's setting for all external
+# contributors). The heavy-build jobs run on Incredibuild's runners, and a fork can change any job's
+# runner or code, so read a fork's whole diff before approving.
 
 on:
   pull_request:
@@ -37,7 +39,7 @@ jobs:
   changes:
     name: pick the checks
     needs: runners
-    runs-on: ${{ fromJSON(needs.runners.outputs.labels).light.linux }}
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).gate.linux }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -55,15 +57,46 @@ jobs:
         id: pick
         env:
           EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
-          if [ "$EVENT" = pull_request ]; then
-            # The merge commit's first parent is the base branch, so the diff is what merging changes.
-            git rev-parse --verify --quiet 'HEAD^2' >/dev/null ||
-              { echo "::error::HEAD isn't GitHub's merge commit, so the pull request's changes are unknown"; exit 1; }
-            bash ci/changed-checks.sh 'HEAD^1'
-          else
-            bash ci/changed-checks.sh --all
-          fi
+          case "$EVENT" in
+            pull_request)
+              # The merge commit's first parent is the base branch, so the diff is what merging changes.
+              git rev-parse --verify --quiet 'HEAD^2' >/dev/null ||
+                { echo "::error::HEAD isn't GitHub's merge commit, so the pull request's changes are unknown"; exit 1; }
+              bash ci/changed-checks.sh 'HEAD^1'
+              ;;
+            workflow_dispatch)
+              # On another branch, this run's ci-ok would land on a pull request's head commit, checked
+              # without the merge with its base.
+              [ "$REF" = refs/heads/main ] ||
+                { echo "::error::run ci by hand on main only (this is $REF): a pull request's own run checks it"; exit 1; }
+              bash ci/changed-checks.sh --all
+              ;;
+            *)
+              bash ci/changed-checks.sh --all
+              ;;
+          esac
+
+  gate-tests:
+    name: gate scripts on the runner image
+    needs: runners
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).gate.linux }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The gate jobs run the image's yq and jq, while make check tests them with the .mise.toml pins:
+      # this is where an image update that changes their behavior would show.
+      - name: Test the check picker and ci-ok with the image's yq and jq
+        run: |
+          echo "$(yq --version), $(jq --version)"
+          bash ci/test-changed-checks.sh
+          bash ci/test-ci-ok.sh
 
   lint:
     name: lint
@@ -73,7 +106,6 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: light
       targets: check
       # Every tool a pre-commit hook in .pre-commit-config.yaml runs
@@ -92,11 +124,12 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: light
       tools: terraform terragrunt
       targets: infra
 
+  # native and validator are the compile-bound checks, so heavy-build, until #67's measurements
+  # settle whether they're past ADR 0005's break-even (docs/benchmarks/ci-runners.md).
   native:
     needs: [runners, changes]
     if: contains(fromJSON(needs.changes.outputs.checks), 'native')
@@ -105,7 +138,6 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: heavy-build
       tools: cmake ninja
       targets: native
@@ -119,7 +151,6 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: heavy-build
       tools: go cmake ninja
       targets: validator validator-integration
@@ -133,7 +164,6 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: light
       tools: node
       targets: game game-integration
@@ -146,7 +176,6 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: light
       tools: node
       targets: web
@@ -159,7 +188,6 @@ jobs:
       contents: read
     with:
       runner-labels: ${{ needs.runners.outputs.labels }}
-      runner-fleets: ${{ needs.runners.outputs.fleets }}
       class: light
       tools: node
       # bots-integration plays against the real game servers, so the game is built first.
@@ -167,12 +195,12 @@ jobs:
 
   ci-ok:
     name: ci-ok
-    needs: [runners, changes, lint, infra, native, validator, game, web, bots]
+    needs: [runners, changes, gate-tests, lint, infra, native, validator, game, web, bots]
     # always(), not !cancelled(): GitHub counts a skipped required check as passed, so ci-ok must run,
     # and fail, when the run is cancelled or a job it waits for failed.
     if: always()
     # When the resolver failed there's no label, this expression fails, and ci-ok fails with it.
-    runs-on: ${{ fromJSON(needs.runners.outputs.labels).light.linux }}
+    runs-on: ${{ fromJSON(needs.runners.outputs.labels).gate.linux }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -186,4 +214,5 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           CHECKS: ${{ needs.changes.outputs.checks }}
+          EVENT: ${{ github.event_name }}
         run: bash ci/ci-ok.sh

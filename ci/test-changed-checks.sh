@@ -185,9 +185,73 @@ for p in $(yq '.all[], .checks[][]' "$real"); do
   assert "path $p exists" test -e "$root/$p"
   case "$p" in */) assert "path $p is a directory" test -d "$root/$p" ;; *) assert "path $p is a file" test -f "$root/$p" ;; esac
 done
-for p in .github/workflows/ci.yml .github/workflows/_make.yml .github/workflows/_runners.yml ci/ .mise.toml Makefile; do
-  assert "a change to $p runs every check" test "$(yq ".all | contains([\"$p\"])" "$real")" = true
+
+# The dependencies between areas that tests are known to have: a change on the right runs the check
+# on the left. Add a row whenever a test starts reading another area's files.
+covers() {
+  yq -o=json -I0 ".checks[\"$1\"]" "$real" |
+    jq -e --arg p "$2" 'any(.[]; if endswith("/") then . as $d | $p | startswith($d) else . == $p end)' >/dev/null
+}
+while read -r c p why; do
+  assert "$c covers $p ($why)" covers "$c" "$p"
+done <<'EOF'
+native data/categories/x.json rarebit-cli's tests load the real word lists
+validator native/hebrew-normalize/x.cc cgo links the library
+validator data/categories/x.json the content tests read the word lists
+web apps/game/README.md a web test checks the UI text for every error code listed there
+bots apps/game/src/x.ts the integration tests run the real game servers
+bots data/categories/x.json the scripted bots answer from the word lists
+EOF
+
+# Every workflow ci.yml runs, directly or through another one, is wiring: a change to it runs every
+# check. Found from the jobs' own `uses:` (not comments), so a new reusable workflow can't be left out.
+wiring=(.github/workflows/ci.yml)
+todo=("$ci")
+while [ "${#todo[@]}" -gt 0 ]; do
+  f="${todo[0]}"
+  todo=("${todo[@]:1}")
+  while IFS= read -r w; do
+    [[ " ${wiring[*]} " == *" $w "* ]] && continue
+    wiring+=("$w")
+    todo+=("$root/$w")
+  done < <(yq '.jobs[] | select(has("uses")) | .uses | select(test("^\./\.github/workflows/")) | sub("^\./"; "")' "$f")
 done
+under_all() {
+  yq -o=json -I0 '.all' "$real" |
+    jq -e --arg p "$1" 'any(.[]; if endswith("/") then . as $d | $p | startswith($d) else . == $p end)' >/dev/null
+}
+assert "ci.yml's wiring was found (_make.yml and _runners.yml among it)" \
+  test "$(printf '%s\n' "${wiring[@]}" | grep -cE '/_(make|runners)\.yml$')" = 2
+for p in "${wiring[@]}" ci/checks.yaml ci/changed-checks.sh ci/ci-ok.sh ci/runner-policy.yaml .mise.toml Makefile; do
+  assert "a change to $p runs every check" under_all "$p"
+done
+
+# The gate: the jobs that pick the checks and decide ci-ok never run on a vendor's runner (ADR 0043).
+# shellcheck disable=SC2016 # the expression is matched literally
+gate='${{ fromJSON(needs.runners.outputs.labels).gate.linux }}'
+for j in changes gate-tests ci-ok; do
+  assert "$j runs in class gate" test "$(yq ".jobs[\"$j\"].\"runs-on\"" "$ci")" = "$gate"
+done
+# Only this ci-ok can satisfy the required check: GitHub matches a check by its name, from any workflow.
+assert "ci.yml has one job called ci-ok" \
+  test "$(yq '[.jobs | to_entries[] | select(.key == "ci-ok" or .value.name == "ci-ok")] | length' "$ci")" = 1
+for f in "$root"/.github/workflows/*.yml; do
+  [ "$f" = "$ci" ] && continue
+  assert "$(basename "$f") has no job called ci-ok" \
+    test "$(yq '[(.jobs // {}) | to_entries[] | select(.key == "ci-ok" or .value.name == "ci-ok")] | length' "$f")" = 0
+done
+# A step or job that may fail without failing its job would let ci-ok pass over a failed check.
+for w in "${wiring[@]}"; do
+  assert "$w has no continue-on-error" test "$(grep -c 'continue-on-error' "$root/$w")" = 0
+done
+# A vendor runner can write Actions cache entries whatever a workflow says, so no job restores one
+# (ADR 0044). The runner measurements (spike-runner.yml) keep their own, read only by themselves.
+cachers="$(grep -lE 'uses:[[:space:]]*(actions/cache|jdx/mise-action|actions/setup-)' "$root"/.github/workflows/*.yml |
+  grep -v '/spike-runner\.yml$' || true)"
+assert "no workflow but the runner measurements restores a cache" test -z "$cachers"
+[ -z "$cachers" ] || echo "  restores a cache: $cachers" >&2
+assert "_make.yml never gets an OIDC token" \
+  test "$(yq '[.permissions, .jobs[].permissions] | map((. // {}) | has("id-token")) | any' "$root/.github/workflows/_make.yml")" = false
 
 echo "changed-checks tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

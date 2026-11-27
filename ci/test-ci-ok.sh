@@ -33,11 +33,12 @@ needs() {
 }
 
 # verdict <name> <expected exit> <CHECKS> <job>=<result> ...
+# The run is a pull request's unless EVENT says otherwise.
 verdict() {
   local name=$1 want=$2 checks=$3 rc=0
   shift 3
   env -u GITHUB_STEP_SUMMARY CI_CHECKS="$tmp/checks.yaml" CHECKS="$checks" NEEDS="$(needs "$@")" \
-    bash "$script" >"$tmp/out" 2>&1 || rc=$?
+    EVENT="${EVENT-pull_request}" bash "$script" >"$tmp/out" 2>&1 || rc=$?
   if [ "$rc" = "$want" ]; then
     pass=$((pass + 1))
   else
@@ -73,6 +74,13 @@ verdict "the changes job's output went missing" 1 '' $ok game=skipped web=skippe
 verdict "the changes job's output is missing, but every check passed" 0 '' $ok game=success web=success
 verdict "the changes job's output isn't a list" 1 '{"web":true}' $ok game=skipped web=skipped
 
+# Outside a pull request every check must have run, whatever the changes job says.
+EVENT=push verdict "a push to main where every check passed" 0 '["game","web"]' $ok game=success web=success
+EVENT=push verdict "a push to main where the changes job picked nothing" 1 '[]' $ok game=skipped web=skipped
+EVENT=merge_group verdict "the merge queue with a check skipped" 1 '["web"]' $ok game=skipped web=success
+EVENT=workflow_dispatch verdict "a manual run with a check skipped" 1 '["game"]' $ok game=success web=skipped
+EVENT='' verdict "no event at all counts as not a pull request" 1 '[]' $ok game=skipped web=skipped
+
 # Anything ci-ok doesn't know fails.
 verdict "a result GitHub might add later" 1 '["web"]' $ok game=skipped web=neutral
 verdict "a result GitHub might add later, on a check that wasn't picked" 1 '["web"]' $ok game=neutral web=success
@@ -91,7 +99,7 @@ if [ "$rc" = 2 ]; then pass=$((pass + 1)); else bad "empty NEEDS: exit $rc, want
 
 # The table names every job and says why, in the job summary too.
 : >"$tmp/summary"
-GITHUB_STEP_SUMMARY="$tmp/summary" CI_CHECKS="$tmp/checks.yaml" CHECKS='["web"]' NEEDS="$(needs $ok game=skipped web=failure)" \
+EVENT=pull_request GITHUB_STEP_SUMMARY="$tmp/summary" CI_CHECKS="$tmp/checks.yaml" CHECKS='["web"]' NEEDS="$(needs $ok game=skipped web=failure)" \
   bash "$script" >/dev/null 2>&1
 if grep -qF '### ci-ok: may not merge' "$tmp/summary" && grep -qE '^\| web \| failure \| no \| .+ \|$' "$tmp/summary" &&
   grep -qE '^\| game \| skipped \| yes \| .+ \|$' "$tmp/summary"; then

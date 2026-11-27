@@ -8,7 +8,7 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0002](0002-cli-credentials-aws-login.md) | Short-lived CLI credentials with `aws login`, no access keys | accepted |
 | [0003](0003-tool-versions-with-mise.md) | Pin tool versions in one place with mise | accepted |
 | [0004](0004-llm-provider-claude-api.md) | Use the Claude API for LLM features, Haiku for volume and Sonnet for curation | accepted |
-| [0005](0005-ci-runner-fleets-by-job-class.md) | Route CI jobs to a runner fleet by job class | accepted |
+| [0005](0005-ci-runner-fleets-by-job-class.md) | Route CI jobs to a runner fleet by job class | accepted; the class `gate` added to `github_only` by 0043, and the cache rule made stricter by 0044 |
 | [0006](0006-agent-permission-gate.md) | Gate aws and gh api calls with an allowlist hook, not ask rules | accepted |
 | [0007](0007-infra-changes-by-human-approval.md) | Infra-changing commands run with a human's approval of the exact command | accepted |
 | [0008](0008-hebrew-normalization-without-icu.md) | Normalize Hebrew with generated Unicode tables, not ICU | accepted |
@@ -47,4 +47,4 @@ One decision per record. An accepted ADR is never edited; a reversal is a new AD
 | [0041](0041-cost-alerts-imported.md) | The cost budgets and anomaly monitor are Terraform, imported from the console, not recreated | accepted |
 | [0042](0042-private-state-units.md) | A unit whose state holds personal data is private: its value comes from the environment, and pull request plans can't read it | accepted |
 | [0043](0043-pull-request-checks-by-path-with-ci-ok.md) | Pull requests run lint and the checks their changes need, summed up in one check, ci-ok | accepted |
-| [0044](0044-ci-tools-from-mise-without-its-env.md) | CI installs the tools pinned in .mise.toml with mise-action, and puts them on PATH without mise's [env] | accepted |
+| [0044](0044-ci-tools-from-mise-without-its-env.md) | CI installs the tools pinned in .mise.toml with a hash-checked mise, puts them on PATH without mise's [env], and restores no cache | accepted |

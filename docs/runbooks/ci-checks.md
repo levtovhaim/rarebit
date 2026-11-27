@@ -6,8 +6,8 @@
 - **Last fired on purpose:** not yet; the first deliberate failure is recorded here with its run.
 
 `ci-ok` waits for every other job in the `ci` workflow and passes only when:
-- the resolver (`runners`), `pick the checks` and `lint` succeeded;
-- each check that `pick the checks` chose succeeded;
+- the resolver (`runners`), `pick the checks`, `gate scripts on the runner image` and `lint` succeeded;
+- each check that `pick the checks` chose succeeded (outside a pull request, every check);
 - each check it didn't choose was skipped, or passed.
 
 The `ci-ok` job's summary has a table with every job's result and verdict, and the summary of `pick the checks` shows which checks ran and why.
@@ -20,11 +20,16 @@ The `ci-ok` job's summary has a table with every job's result and verdict, and t
 | `ci-ok` fails with an error evaluating `runs-on`, and its steps never ran | The resolver failed, so there's no runner label: `docs/runbooks/ci-runner-fallback.md` |
 | A row says "ci-ok doesn't wait for this check" | A check in `ci/checks.yaml` (or one the picker chose) has no job in `ci-ok`'s `needs`. Fix `ci.yml` |
 | `pick the checks` fails with `HEAD isn't GitHub's merge commit` | The pull request's checkout isn't GitHub's merge commit, so its changes are unknown. Usually a pull request with merge conflicts has no merge commit at all and no run; anything else is unexpected |
+| `pick the checks` fails with `run ci by hand on main only` | Someone ran the workflow by hand on another branch. A pull request's own run checks its branch |
 | `pick the checks` fails with `changed-checks: …` | `ci/checks.yaml` is malformed (the message says how), or the base commit is missing |
 | A check didn't run, but the change needed it | The change touched a path no check covers in `ci/checks.yaml` |
-| `make` fails with `command not found` | A tool the target needs isn't in that job's `tools` list in `ci.yml` |
-| `Install the tools` fails | A download failed: GitHub's API limit (mise-action uses the run's token), or a tool's download host is down. The message names the tool |
+| `make` fails with `command not found`, or a tool runs at a version `.mise.toml` doesn't pin | A tool the target needs isn't in that job's `tools` list in `ci.yml`. When the runner image has its own copy (CMake, Ninja, Node.js, Python, jq, yq), that copy runs instead; the `Install the tools` step lists what mise installed |
+| `Install mise` fails with `FAILED` from `sha256sum` | The downloaded mise isn't the release the hash in `_make.yml` names. Don't change the hash to make it pass: compare it with the release's `SHASUMS256.txt` first. A mismatch with the release itself is a supply-chain incident |
+| `Install mise` or `Install the tools` fails on a download | GitHub's API limit (the install uses the run's token), or a download host is down. The message names the tool |
+| `gate scripts on the runner image` fails, but `make check` passes locally | The runner image's `yq` or `jq` changed behavior. The job's log prints both versions |
 | `tflint --init` fails with a rate limit | The lint job lost its `github-token: true` |
+| The pull request shows no `ci-ok` at all, or the run shows a startup failure | GitHub refused the workflow before any job ran: a YAML error, an action the repository's Actions policy doesn't allow, or a reusable workflow that doesn't exist. The run's page names it. Until #69 requires `ci-ok`, nothing blocks the merge, so don't merge without it |
+| A `heavy-build` job (`native`, `validator`) stays queued | The Incredibuild fleet isn't taking jobs: `docs/runbooks/ci-runner-fallback.md`. There's no queue-time check yet (#67) |
 
 ## Impact on players
 
