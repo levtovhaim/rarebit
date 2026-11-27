@@ -58,13 +58,18 @@ done < <(printf '%s\n' "${checks[@]}" "${picked[@]}" | sed '/^$/d' | sort -u)
 while IFS=$'\t' read -r job result; do
   ok=no
   why=""
-  # TODO(human): decide whether this job's result lets the pull request merge.
-  #   $job               the job's name in ci.yml
-  #   $result            success, failure, cancelled or skipped
-  #   is_check "$job"    true when it's one of the checks in ci/checks.yaml
-  #   is_picked "$job"   true when the changes job picked it for this run
-  # Set ok=yes when this result is fine, and why="..." in a few words, for the table.
-  # ci/test-ci-ok.sh is the specification: run it until every case passes.
+  if ! is_check "$job"; then
+    [ "$result" = success ] && ok=yes
+    why="every run needs it"
+  elif is_picked "$job"; then
+    [ "$result" = success ] && ok=yes
+    why="picked for this change"
+  else
+    case "$result" in
+      success | skipped) ok=yes ;;
+    esac
+    why="not needed for this change"
+  fi
 
   rows+=("| $job | $result | $ok | $why |")
   [ "$ok" = yes ] || fail=1
