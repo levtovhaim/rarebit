@@ -29,16 +29,63 @@ resource "aws_internet_gateway" "this" {
   tags   = { Name = var.name }
 }
 
-# TODO(human): the subnets and the route tables.
-#   - aws_subnet.public: one per zone in var.public_subnets, no public IPs on launch, tagged for
-#     internet-facing load balancers;
-#   - aws_subnet.private: one per zone in var.private_subnets, tagged for internal load balancers and
-#     for Karpenter's subnet discovery;
-#   - aws_route_table.public, with a default route to the internet gateway, and an association per
-#     public subnet;
-#   - aws_route_table.private, with an association per private subnet (its default route comes from
-#     the NAT instance below).
-#   tests/network.tftest.hcl is the specification.
+resource "aws_subnet" "public" {
+  for_each = var.public_subnets
+
+  vpc_id                  = aws_vpc.this.id
+  availability_zone       = each.key
+  cidr_block              = each.value
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name                     = "${var.name}-public-${each.key}"
+    "kubernetes.io/role/elb" = "1"
+  }
+}
+
+resource "aws_subnet" "private" {
+  for_each = var.private_subnets
+
+  vpc_id            = aws_vpc.this.id
+  availability_zone = each.key
+  cidr_block        = each.value
+
+  tags = {
+    Name                              = "${var.name}-private-${each.key}"
+    "kubernetes.io/role/internal-elb" = "1"
+    "karpenter.sh/discovery"          = var.cluster_name
+  }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.this.id
+  tags   = { Name = "${var.name}-public" }
+}
+
+resource "aws_route" "public_internet" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.this.id
+}
+
+resource "aws_route_table_association" "public" {
+  for_each = aws_subnet.public
+
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.this.id
+  tags   = { Name = "${var.name}-private" }
+}
+
+resource "aws_route_table_association" "private" {
+  for_each = aws_subnet.private
+
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private.id
+}
 
 # The NAT instance: fck-nat on a t4g.nano in an Auto Scaling group of one, which replaces it if it dies
 # (ADR 0046). Its static network interface keeps the Elastic IP and the private route across a
