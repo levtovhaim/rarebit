@@ -72,6 +72,20 @@ All three Incredibuild labels were served, Arm and Windows included. Both Linux 
 
 Later samples, from the runner policy's proof workflow (one no-op job each, so not yet a measurement): `incredibuild-ubuntu-2404` queued **41 s** (run 45956498946, 2026-11-27 07:09Z) and **11 s** (run 45958010438, 07:22Z). That's far below the spike's start-up; `runner-edge.yml` re-measures it with medians (#67).
 
+The first real checks (`ci.yml` on pull request #71, run 46008430705, 2026-11-27 13:35Z; one sample, so not a median):
+
+| Job | Fleet | Queued | Ran (install + make) |
+|---|---|---|---|
+| `heavy-build on linux` (runner policy probe, run 46008430662) | Incredibuild | 6 min 58 s | 3 s |
+| `validator` (`make validator validator-integration`) | Incredibuild | 7 min 56 s | 50 s |
+| `native` (`make native`) | Incredibuild | 13 min 54 s | 18 s |
+| `lint` (`make check`) | GitHub-hosted | 2 s | 41 s |
+| `infra`, `game`, `bots`, `web` | GitHub-hosted | 2–3 s | 67 s, 61 s, 100 s, 12 s |
+
+- The three Incredibuild jobs, queued within 4 seconds of each other, started one after another: the probe at 13:42:39, `validator` at 13:43:41 (just after the probe finished), `native` at 13:49:39. Each job had its own runner (runner IDs 24, 25 and 37), so this run shows no machine reused between jobs. It does look like one machine at a time, possibly a trial limit; that's not confirmed (#67).
+- A runner's name, `Incredibuild-run-<job ID>`, is the ID of the job it was started for, not of the job it ran: `validator` ran on the runner named after `native`'s job.
+- Both checks are far below the break-even: under a minute of work each, behind 8–14 minutes of queue. #67 settles their class with medians.
+
 ### Linux x64 measurements (seconds unless noted)
 
 | Metric | GitHub, cold | GitHub, warm | Incredibuild, cold | Incredibuild, warm |
