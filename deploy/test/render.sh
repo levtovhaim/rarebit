@@ -55,6 +55,11 @@ render() {
     for f in values.yaml image-tags.yaml; do
       [ -f "$envs/$env/$svc/$f" ] && files+=(-f "$envs/$env/$svc/$f")
     done
+    # Not pushed yet (deploy/push-images.sh writes it): render with the placeholder. A real install
+    # without it fails the schema, since image.tag is required.
+    if ours "$svc" && [ ! -f "$envs/$env/$svc/image-tags.yaml" ]; then
+      sets+=(--set-string "image.tag=$fake_tag")
+    fi
   fi
   ours "$svc" && sets+=(--set "image.registry=$fake_registry")
   helm template "$svc" "$chart" "${files[@]}" "${sets[@]}" "$@"
@@ -92,21 +97,24 @@ for svc in "${services[@]}"; do check_render - "$svc"; done
 
 for env in "${environments[@]}"; do
   name_ok "$env" || { bad "deploy/envs/$env isn't a valid environment name"; continue; }
-  mapfile -t env_services < <(find "$envs/$env" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-  for svc in "${env_services[@]}"; do
-    if ! name_ok "$svc" || [ ! -d "$apps/$svc" ]; then
-      bad "deploy/envs/$env/$svc isn't a service in deploy/apps"
-      continue
-    fi
+  # An environment's folders name services in deploy/apps; it deploys every service there, with its
+  # own layers where it has them (docs/runbooks/eks.md).
+  while IFS= read -r d; do
+    [ -d "$apps/$d" ] || bad "deploy/envs/$env/$d isn't a service in deploy/apps"
+  done < <(find "$envs/$env" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  for svc in "${services[@]}"; do
     tags="$envs/$env/$svc/image-tags.yaml"
     if ours "$svc"; then
       # A promotion changes only this file (CLAUDE.md → Conventions), and it has no code owner: it may
       # hold an image tag and nothing else.
-      assert "$env/$svc: image-tags.yaml exists" test -f "$tags"
-      assert "$env/$svc: image-tags.yaml holds image.tag and nothing else" \
-        bash -c "yq -o=json '.' '$tags' | jq -e 'keys == [\"image\"] and (.image | keys) == [\"tag\"]'"
-      assert "$env/$svc: the tag is a main build, by digest" \
-        bash -c "[[ \"\$(yq '.image.tag' '$tags')\" =~ $main_tag ]]"
+      if [ -f "$tags" ]; then
+        assert "$env/$svc: image-tags.yaml holds image.tag and nothing else" \
+          bash -c "yq -o=json '.' '$tags' | jq -e 'keys == [\"image\"] and (.image | keys) == [\"tag\"]'"
+        assert "$env/$svc: the tag is a main build, by digest" \
+          bash -c "[[ \"\$(yq '.image.tag' '$tags')\" =~ $main_tag ]]"
+      else
+        echo "note: $env/$svc has no image-tags.yaml yet (deploy/push-images.sh writes it); rendered with a placeholder tag" >&2
+      fi
     else
       assert "$env/$svc: an upstream image has no image-tags.yaml" test ! -e "$tags"
     fi
@@ -183,6 +191,9 @@ for set in - "${environments[@]}"; do
     test "$(jq '[.[].a | del(.["alb.ingress.kubernetes.io/group.order"], .["alb.ingress.kubernetes.io/target-group-attributes"])] | unique | length' <<<"$ingresses")" = 1
   assert "$label: every Ingress targets pod IPs and checks /readyz" \
     test "$(jq '[.[].a | .["alb.ingress.kubernetes.io/target-type"] == "ip" and .["alb.ingress.kubernetes.io/healthcheck-path"] == "/readyz"] | all' <<<"$ingresses")" = true
+  # AWS's own rule, which no schema check sees: CreateTargetGroup fails unless timeout < interval.
+  assert "$label: every health check times out before its next interval" \
+    test "$(jq '[.[].a | (.["alb.ingress.kubernetes.io/healthcheck-timeout-seconds"] // "5" | tonumber) < (.["alb.ingress.kubernetes.io/healthcheck-interval-seconds"] // "15" | tonumber)] | all' <<<"$ingresses")" = true
   assert "$label: the game takes /socket.io, before the web UI's /" \
     test "$(jq -c 'map({(.svc): {paths, order: (.a["alb.ingress.kubernetes.io/group.order"] | tonumber)}}) | add | [.game.paths, .web.paths, .game.order < .web.order]' <<<"$ingresses")" = '[["/socket.io"],["/"],true]'
   assert "$label: no Ingress routes to a metrics port" test "$(jq '[.[].ports[]] | index("metrics") == null' <<<"$ingresses")" = true

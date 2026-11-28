@@ -1,0 +1,19 @@
+# The app namespace: every Rarebit service and job, and the Postgres cluster.
+#   - elbv2.k8s.aws/pod-readiness-gate-inject: the AWS Load Balancer Controller adds a readiness gate to
+#     every pod with an ALB target, so a rollout waits until the ALB itself sees a new pod healthy
+#     before it stops an old one (ADR 0048).
+#   - pod-security.kubernetes.io: the restricted Pod Security Standard, enforced. The chart's pods meet
+#     it (ADR 0045), and so do CloudNativePG's.
+# It must exist, with these labels, before the first pod in it: labels added later don't change pods
+# that already run.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rarebit
+  labels:
+    app.kubernetes.io/part-of: rarebit
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.37

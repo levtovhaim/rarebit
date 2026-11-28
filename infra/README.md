@@ -47,6 +47,8 @@ Run these in WSL, inside the repo, where mise is active.
 
    For `_global/cost-alerts`, add `RAREBIT_ALERT_EMAIL = "<address>"` to the same `[env]`: where the budget and anomaly alerts go (ADR 0042). Only that unit needs it.
 
+   For `prod/eks`, add `RAREBIT_ADMIN_CIDR = "<your public IPv4>/32"` (`curl -s https://checkip.amazonaws.com`): the only address the cluster's API answers (ADR 0047). When your address changes, update it and apply the unit again.
+
 Terragrunt keeps its working copies in `~/.cache/terragrunt` (`TG_DOWNLOAD_DIR` in `.mise.toml`), not in the checkout. On a Windows drive mounted into WSL, Terragrunt can't replace its own generated files (ADR 0033), so run Terragrunt only where mise is active. With `TG_PROVIDER_CACHE=1` (also in `.mise.toml`), Terragrunt keeps one copy of each provider for all units instead of one per working copy.
 
 ## Working with a unit

@@ -140,8 +140,10 @@ repos:
         name: trivy config (infra/ misconfigurations)
         # Every severity fails the hook. An accepted finding gets a `#trivy:ignore:<ID>` comment
         # with its reason above the resource. --skip-check-update uses the checks built into the
-        # pinned Trivy, so new upstream checks arrive with a Trivy bump, not overnight.
-        entry: trivy config --quiet --exit-code 1 --skip-check-update --skip-dirs '**/.terraform' infra
+        # pinned Trivy, so new upstream checks arrive with a Trivy bump, not overnight. Community
+        # modules (registry sources Trivy downloads itself) aren't scanned: their code isn't ours to
+        # change, and they're reviewed and pinned like any dependency.
+        entry: trivy config --quiet --exit-code 1 --skip-check-update --skip-dirs '**/.terraform' --tf-exclude-downloaded-modules infra
         language: system
         files: ^infra/
         pass_filenames: false

@@ -1,0 +1,17 @@
+# Service catalog entry (catalog/README.md).
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: postgres
+  description: The validator's word lists, the answer history and the rarity table. In the cluster, one CloudNativePG instance (deploy/platform/postgres/cluster.yaml).
+  labels:
+    tier: "1" # without it every answer goes to a room vote
+  links:
+    - url: https://github.com/levtovhaim/rarebit/blob/main/docs/runbooks/eks.md
+      title: Runbook
+spec:
+  type: database
+  lifecycle: experimental
+  owner: user:haimlevtov
+  system: rarebit
+# SLOs: none yet; the validator's readiness fails when Postgres does (apps/validator/README.md).

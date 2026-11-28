@@ -17,7 +17,19 @@ Resources managed in `infra/live` that exist whether or not the platform is up. 
 
 ## The platform (hourly, only while up)
 
-The cluster, its nodes, the load balancer and the NAT instance come with the platform PRs, each with its hourly cost and an Infracost diff (CLAUDE.md → Rules, rule 6). Nothing hourly exists yet.
+Prod (`infra/live/prod`, ADRs 0046–0048) exists only while a session runs: it's created and destroyed by hand (`docs/runbooks/eks.md`). Rates for eu-central-1, on-demand, from the AWS Price List API (2026-11-23 and 2026-11-27):
+
+| Resource | $/h |
+|---|---|
+| EKS control plane (standard support) | 0.100 |
+| 2 × c7i-flex.large nodes, on-demand (the AWS Free plan refuses t3.medium) | 0.194 |
+| ALB (hourly, plus about 0.004 of capacity units at this traffic) | 0.031 |
+| 4 public IPv4 addresses (the NAT instance's Elastic IP and the public address its launch template also gives it, the ALB's two) | 0.020 |
+| NAT instance (t4g.micro, fck-nat; the Free plan refuses t4g.nano) | 0.010 |
+| EBS: the nodes' and the NAT instance's root volumes and Postgres's 2 GiB, about 50 GB | 0.007 |
+| **Total** | **≈ 0.36** |
+
+No NAT Gateway ($0.052/h and $0.052/GB, ADR 0046), no interface endpoints ($0.012/h per zone each), no control-plane logs. Infracost isn't wired into pull requests yet (#61), so this table is the estimate; the next day's Cost Explorer actuals are compared with it.
 
 ## Quotas
 

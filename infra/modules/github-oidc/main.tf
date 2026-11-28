@@ -155,6 +155,11 @@ locals {
             "ec2:GetConsoleOutput",
             "ec2:GetConsoleScreenshot",
             "ec2:GetPasswordData",
+            # A cluster's description holds its API's allowed addresses (an operator's home address),
+            # and its access entries name people's IAM users (ADR 0047)
+            "eks:DescribeAccessEntry",
+            "eks:DescribeCluster",
+            "eks:ListAccessEntries",
             "kinesis:GetRecords",
             "kinesis:GetShardIterator",
             "logs:FilterLogEvents",

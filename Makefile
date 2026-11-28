@@ -41,8 +41,9 @@ infra: ## Check infra/ with no AWS credentials: validate and test each module (A
 	done; \
 	units="$$(find infra/live -name terragrunt.hcl -not -path '*/.terragrunt-cache/*' -exec dirname {} \; | sort)"; \
 	[ -n "$$units" ] || { echo "make infra: no Terragrunt units found under infra/live" >&2; exit 1; }; \
-	echo "== infra/live (a placeholder account ID, no backend; nothing reaches AWS)"; \
+	echo "== infra/live (a placeholder account ID and admin address, no backend; nothing reaches AWS)"; \
 	export TG_DOWNLOAD_DIR="$(INFRA_TG_DOWNLOAD_DIR)" TG_NON_INTERACTIVE=true TG_LOG_LEVEL=error; \
+	export RAREBIT_ADMIN_CIDR=192.0.2.1/32; \
 	for u in $$units; do \
 		if RAREBIT_AWS_ACCOUNT_ID= terragrunt render --working-dir "$$u" --format json >/dev/null 2>&1; then \
 			echo "make infra: $$u renders with an empty account ID, so its account check would be off" >&2; exit 1; \

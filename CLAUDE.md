@@ -41,7 +41,7 @@
 ## Commands
 - `mise install`: install the pinned tool versions from `.mise.toml`. Inside the repo, mise also sets `AWS_PROFILE=rarebit`; check `aws sts get-caller-identity` before any AWS command.
 - `make check`: lint and tests. Today it lints every file (gofmt included) and runs the permission-gate tests, the dependency age-scan tests, the CI script tests (`ci/test-*.sh`: the runner policy, the check picker and `ci-ok`) and the word-list check (`data/tools/check_data.py`); it narrows to what changed once there's enough to test. Run it before every commit.
-- `make infra`: with no AWS credentials at all, for every module in `infra/modules`, `terraform validate`, `terraform test` against a mocked AWS provider and its example's `validate` (lock files read-only); then it validates every Terragrunt unit in `infra/live` with a placeholder account ID and no backend, and checks that each refuses an empty account ID. Run it whenever `infra/` changes. Real units read the account ID from `RAREBIT_AWS_ACCOUNT_ID` in `.mise.local.toml`, which git ignores (`infra/README.md` → Setup).
+- `make infra`: with no AWS credentials at all, for every module in `infra/modules`, `terraform validate`, `terraform test` against a mocked AWS provider and its example's `validate` (lock files read-only); then it validates every Terragrunt unit in `infra/live` with a placeholder account ID and admin address and no backend, and checks that each refuses an empty account ID. Run it whenever `infra/` changes. Real units read the account ID from `RAREBIT_AWS_ACCOUNT_ID` in `.mise.local.toml`, which git ignores (`infra/README.md` → Setup).
 - `make native`: build and test the C++ code in `native/` for the current OS (the library and `rarebit-cli`), using its CMake preset (on Windows without `make`: the three `cmake --preset windows-msvc` steps from `native/`). `make check` doesn't build C++: run `make native` whenever `native/` changes. When the validator's matching rules or `rarebit-cli check` change, run the parity test too: `bash native/rarebit-cli/tests/parity.sh` (needs `make up` and `make bots-image`).
 - `make validator`: build the library for cgo, then `go vet`, `go test -race` and `go build` in `apps/validator` (Linux; macOS unverified; on Windows in WSL). `make validator-integration` adds the Postgres tests against a throwaway container. Run both whenever `apps/validator` or `native/` changes. `make validator-image-smoke` builds the container image and runs it non-root and read-only against a throwaway Postgres: run it whenever `apps/validator`, `native/` or `data/categories/` changes.
 - `make game`: `npm ci` (install scripts disabled), type check, unit tests and build in `apps/game`. `make game-integration` runs the Redis tests, with several game servers as pods, against a throwaway Redis container. Run both whenever `apps/game` changes. `make game-image-smoke` builds the game image and runs it non-root and read-only against a throwaway Redis: run it whenever `apps/game` changes too (after `make game`, which installs its test client).
@@ -51,14 +51,14 @@
 - `make deploy`: `helm lint` the shared chart, render every service in `deploy/apps` with it, validate the manifests with kubeconform, and check them against the golden path and each service's shutdown timing (`deploy/test/render.sh`, ADR 0045). Run it whenever `deploy/` or `catalog/` changes.
 - `make kind-up` / `make kind-down`: local Kubernetes (kind) with Argo CD syncing from git. Planned: until it's built, both targets exit 2.
 - `plat doctor`: verify tools, versions, AWS identity and kube context.
-- `plat env up` / `plat env down`: create or destroy the AWS platform. **A human runs it or approves the exact command** (rule 2).
+- `plat env up` / `plat env down`: create or destroy the AWS platform. **A human runs it or approves the exact command** (rule 2). Until `plat` exists, `bash platform/env.sh up` / `down` does it (ADR 0049), and `bash platform/env.sh status` shows what exists (read-only); runbook `docs/runbooks/eks.md`.
 - PR labels: `preview` creates the PR's preview environment and runs the test arena; `arena:full` adds the full persona tournament.
 
 ## Rules for every contributor (humans and agents)
 1. **PRs only.** Never push to `main`. One issue = one small PR. Use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `infra:`).
 2. **Infra-changing commands need a human's decision.** Never run these on your own:
    - `terraform` or `terragrunt` `apply`/`destroy`/`import`/`state`/`force-unlock`/`refresh`/`taint`/`untaint`, and `init -migrate-state`
-   - `plat env up` / `plat env down`
+   - `plat env up` / `plat env down`, and `bash platform/env.sh up` / `down`
    - `kubectl apply`/`delete` outside your own preview namespace
    - `helm install`/`upgrade`/`uninstall`/`rollback`
    - any `aws` command that creates, changes or deletes something
