@@ -1,7 +1,6 @@
 # Architecture
 
 Components and data flow. The **Status** column says what exists today; everything else is the design the code is being built toward. See [CLAUDE.md](../CLAUDE.md) for the rules every component follows, and [docs/adr/](adr/) for why each choice was made.
-
 ## Components
 
 | Component | Technology | Role | Status |
@@ -12,7 +11,7 @@ Components and data flow. The **Status** column says what exists today; everythi
 | `apps/web` | React, Vite | Hebrew (RTL) UI for phones, built to static files that work under any path prefix (relative asset URLs, the prefix read from the page's own URL; no `BASE_PATH` setting); every screen renders from the room snapshot the game pushes, and the player resumes after a reload or a drain ([README](../apps/web/README.md), ADR 0026). Image: nginx-unprivileged serving the build under any prefix on 8080, `/metrics` on 9113, the rest of the runtime contract in nginx (ADR 0027); hashed assets cached for a year, the page revalidated (ADR 0028); a strict CSP (ADR 0029); built and smoke-tested locally. | built (image not in a registry yet) |
 | `apps/bots` | TypeScript, `socket.io-client` | Simulated players that are full protocol clients: the synthetic game (exit 0 or 1), load tests and the chaos observer, judged by failed games; a strategy hook for the test arena's personas ([README](../apps/bots/README.md), ADR 0023). Image: distroless Node.js, built and smoke-tested locally (ADR 0025). Later the bot swarm. | built (image not in a registry yet) |
 | `apps/content-agents` | scheduled agents | The answer curator and the category creator: they propose content changes as PRs to `data/` and never write to the database | planned |
-| `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Seeded with the six regular categories. | seeded |
+| `data/` | JSON files in git | Word lists and categories, changed only by PR ([README](../data/README.md), ADR 0012). Fifteen categories: the six regular ones (ארץ, עיר, חי, צומח, שם, מקצוע) and nine creative ones (דומם, מפורסם, boys' and girls' names, brands, companies, historical figures, movies, series). | seeded |
 | `native/rarebit-cli` | C++ (CMake) | For developers and operators: judges an answer offline from `data/categories` with the validator's rules (a parity test checks they agree), shows normalization keys, and runs the bots image with docker ([README](../native/rarebit-cli/README.md), ADR 0030). Linux build verified; Windows and macOS with the CI matrix. | built (no releases yet) |
 | Redis | 8.10 | Room, timer and matchmaking state, Socket.IO fan-out between game pods, the answer-event stream (keys in `apps/game/src/store.ts`, tested against a local container) | used by the game |
 | Postgres | 18 | Word lists (schema in `apps/validator`, tested against a local container), answer history, the rarity table | schema for word lists |
