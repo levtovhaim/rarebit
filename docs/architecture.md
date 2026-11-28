@@ -1,6 +1,8 @@
 # Architecture
 
 Components and data flow. The **Status** column says what exists today; everything else is the design the code is being built toward. See [CLAUDE.md](../CLAUDE.md) for the rules every component follows, and [docs/adr/](adr/) for why each choice was made.
+
+**Diagram:** [diagrams/rarebit-platform.drawio](diagrams/rarebit-platform.drawio) shows what's built: prod at runtime, then CI, infrastructure and operations, with what's still planned. Open it in [app.diagrams.net](https://app.diagrams.net) (File → Open from → Device), and update it when this page's components change.
 ## Components
 
 | Component | Technology | Role | Status |
